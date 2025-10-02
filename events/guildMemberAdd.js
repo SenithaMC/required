@@ -7,10 +7,8 @@ module.exports = {
   async execute(member, client) {
     const guild = member.guild;
     
-    // ===== GREET FEATURE =====
     console.log(`Member joined: ${member.user.tag} in ${guild.name}`);
     
-    // Check if greetConfigs exists and has the guild
     if (!client.greetConfigs) {
       client.greetConfigs = new Map();
       console.log('Initialized client.greetConfigs in guildMemberAdd event');
@@ -25,17 +23,14 @@ module.exports = {
       
       if (channel) {
         try {
-          // Replace placeholders in the message
           let welcomeMessage = greetConfig.message
             .replace(/{user}/g, `<@${member.id}>`)
             .replace(/{server}/g, guild.name)
             .replace(/{memberCount}/g, guild.memberCount.toString());
 
-          // Send the welcome message
           const sentMessage = await channel.send(welcomeMessage);
           console.log(`✅ Sent welcome message for ${member.user.tag} in ${guild.name}`);
 
-          // Delete the message after the specified time if greater than 0
           if (greetConfig.deleteAfter > 0) {
             setTimeout(async () => {
               try {
@@ -48,11 +43,9 @@ module.exports = {
           }
         } catch (error) {
           console.error('❌ Failed to send welcome message:', error);
-          // Remove the config if we can't send messages
           client.greetConfigs.delete(guild.id);
         }
       } else {
-        // Channel doesn't exist, remove it from storage
         console.log(`Channel ${greetConfig.channelId} not found in cache, removing from greetConfigs`);
         client.greetConfigs.delete(guild.id);
       }
@@ -60,7 +53,6 @@ module.exports = {
       console.log(`No greet configuration set for guild ${guild.id}`);
     }
 
-    // ===== EXISTING INVITE TRACKING CODE =====
     try {
       const newInvites = await guild.invites.fetch();
       const oldInvites = client.invites.get(guild.id) || new Map();
