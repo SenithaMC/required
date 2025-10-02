@@ -14,7 +14,6 @@ module.exports = {
       return message.channel.send({ embeds: [embed], ephemeral: true });
     }
 
-    // Create confirmation buttons
     const row = new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder()
@@ -27,31 +26,27 @@ module.exports = {
           .setStyle(ButtonStyle.Secondary)
       );
 
-    // Create confirmation embed
     const confirmEmbed = new EmbedBuilder()
       .setColor(0xFFA500)
       .setTitle('⚠️ Confirm Channel Nuke')
       .setDescription('Are you sure you want to nuke this channel? This action cannot be undone!')
       .setTimestamp();
 
-    // Send confirmation message with buttons
     const confirmMessage = await message.channel.send({ 
       embeds: [confirmEmbed], 
       components: [row],
       ephemeral: true 
     });
 
-    // Create a collector to handle button interactions
     const filter = i => i.user.id === message.author.id;
     const collector = confirmMessage.createMessageComponentCollector({ 
       filter, 
-      time: 15000 // 15 seconds to respond
+      time: 15000
     });
 
     collector.on('collect', async i => {
       if (i.customId === 'confirm_nuke') {
         try {
-          // Disable buttons after confirmation
           row.components[0].setDisabled(true);
           row.components[1].setDisabled(true);
           
@@ -65,13 +60,11 @@ module.exports = {
             ]
           });
 
-          // Perform the nuke
           const position = message.channel.position;
           const newChannel = await message.channel.clone();
           await message.channel.delete();
           await newChannel.setPosition(position);
           
-          // Send success message in the new channel
           const successEmbed = new EmbedBuilder()
             .setColor(0x00FF00)
             .setTitle('💣 Channel Nuked')
@@ -91,7 +84,6 @@ module.exports = {
           await i.followUp({ embeds: [errorEmbed], ephemeral: true });
         }
       } else if (i.customId === 'cancel_nuke') {
-        // Disable buttons after cancellation
         row.components[0].setDisabled(true);
         row.components[1].setDisabled(true);
         
@@ -110,7 +102,6 @@ module.exports = {
 
     collector.on('end', collected => {
       if (collected.size === 0) {
-        // Disable buttons when time runs out
         row.components[0].setDisabled(true);
         row.components[1].setDisabled(true);
         
