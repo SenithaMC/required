@@ -26,7 +26,6 @@ module.exports = {
       return message.channel.send({ embeds: [embed], ephemeral: true });
     }
 
-    // Create confirmation buttons
     const row = new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder()
@@ -39,31 +38,27 @@ module.exports = {
           .setStyle(ButtonStyle.Secondary)
       );
 
-    // Create confirmation embed
     const confirmEmbed = new EmbedBuilder()
       .setColor(0xFFA500)
       .setTitle('⚠️ Confirm Message Purge')
       .setDescription(`Are you sure you want to purge ${amount} messages? This action cannot be undone!`)
       .setTimestamp();
 
-    // Send confirmation message with buttons
     const confirmMessage = await message.channel.send({ 
       embeds: [confirmEmbed], 
       components: [row],
       ephemeral: true 
     });
 
-    // Create a collector to handle button interactions
     const filter = i => i.user.id === message.author.id;
     const collector = confirmMessage.createMessageComponentCollector({ 
       filter, 
-      time: 15000 // 15 seconds to respond
+      time: 15000
     });
 
     collector.on('collect', async i => {
       if (i.customId === 'confirm_purge') {
         try {
-          // Disable buttons after confirmation
           row.components[0].setDisabled(true);
           row.components[1].setDisabled(true);
           
@@ -80,12 +75,10 @@ module.exports = {
           let deletedCount = 0;
           let remaining = amount;
           
-          // Delete messages in batches of 100 (Discord API limit)
           while (remaining > 0) {
             const batchSize = Math.min(remaining, 100);
             const messages = await message.channel.messages.fetch({ limit: batchSize });
             
-            // Filter out messages older than 14 days (they can't be bulk deleted)
             const deletableMessages = messages.filter(msg => 
               Date.now() - msg.createdTimestamp < 14 * 24 * 60 * 60 * 1000
             );
@@ -96,13 +89,11 @@ module.exports = {
             deletedCount += deletableMessages.size;
             remaining -= deletableMessages.size;
             
-            // Wait a short time between batches to avoid rate limiting
             if (remaining > 0) {
               await new Promise(resolve => setTimeout(resolve, 1000));
             }
           }
           
-          // Final result embed
           const resultEmbed = new EmbedBuilder()
             .setColor(0x00FF00)
             .setTitle('✅ Purge Complete')
@@ -129,7 +120,6 @@ module.exports = {
           });
         }
       } else if (i.customId === 'cancel_purge') {
-        // Disable buttons after cancellation
         row.components[0].setDisabled(true);
         row.components[1].setDisabled(true);
         
@@ -149,7 +139,6 @@ module.exports = {
 
     collector.on('end', collected => {
       if (collected.size === 0) {
-        // Disable buttons when time runs out
         row.components[0].setDisabled(true);
         row.components[1].setDisabled(true);
         
