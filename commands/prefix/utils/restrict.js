@@ -37,7 +37,6 @@ module.exports = {
 
     try {
       if (action === 'enable') {
-        // Get role and channel mentions for exemptions
         const roleMentions = message.mentions.roles.map(role => role.id);
         const channelMentions = message.mentions.channels.map(channel => channel.id);
 
