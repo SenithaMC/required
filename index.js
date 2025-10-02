@@ -6,7 +6,6 @@ const mongoose = require('mongoose');
 const db = require('./utils/db');
 const GiveawayCleanup = require('./utils/giveawayCleanup');
 
-// Create Discord client
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -26,7 +25,6 @@ const client = new Client({
   ]
 });
 
-// Command collections
 client.prefixCommands = new Collection();
 client.slashCommands = new Collection();
 client.componentHandlers = new Collection();
@@ -35,10 +33,8 @@ client.invites = new Map();
 client.prefixCache = new Map();
 client.giveawayCleanup = new GiveawayCleanup(client);
 
-// Cooldown map
 const cooldowns = new Map();
 
-// Recursive command loader
 const loadCommands = async (type) => {
   const basePath = path.join(__dirname, 'commands', type);
 
@@ -78,12 +74,10 @@ const loadCommands = async (type) => {
   readCommands(basePath);
 };
 
-// Register slash commands with Discord
 const registerSlashCommands = async () => {
   try {
     const commands = [];
     
-    // Get all slash commands data
     for (const [name, command] of client.slashCommands) {
       commands.push({
         name: name,
@@ -97,7 +91,6 @@ const registerSlashCommands = async () => {
     
     console.log('🔄 Registering slash commands...');
     
-    // Register commands globally
     await rest.put(
       Routes.applicationCommands(client.user.id),
       { body: commands }
@@ -109,7 +102,6 @@ const registerSlashCommands = async () => {
   }
 };
 
-// Load MongoDB models
 const loadModels = () => {
   const modelsPath = path.join(__dirname, 'models');
   if (!fs.existsSync(modelsPath)) return;
@@ -130,7 +122,6 @@ const loadModels = () => {
   }
 };
 
-// Load events
 const loadEvents = () => {
   const eventsPath = path.join(__dirname, 'events');
   if (!fs.existsSync(eventsPath)) return;
@@ -152,7 +143,6 @@ const loadEvents = () => {
   }
 };
 
-// Connect to MongoDB
 const connectDatabase = async () => {
   try {
     if (!config.mongoURI) return false;
@@ -165,14 +155,13 @@ const connectDatabase = async () => {
   }
 };
 
-// Initialize bot
 const initializeBot = async () => {
   try {
     const dbConnected = await connectDatabase();
     if (!dbConnected) console.log('⚠️ Continuing without database connection');
 
     await loadCommands('prefix');
-    await loadCommands('slash'); // Load slash commands
+    await loadCommands('slash');
     loadModels();
     loadEvents();
 
@@ -188,7 +177,6 @@ const initializeBot = async () => {
   }
 };
 
-// Bot ready
 client.once(Events.ClientReady, async () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
 
@@ -197,7 +185,6 @@ client.once(Events.ClientReady, async () => {
     console.log('✅ Giveaway cleanup service started');
   }
 
-  // Cache invites for all guilds
   client.guilds.cache.each(async (guild) => {
     try {
       const invites = await guild.invites.fetch();
@@ -208,11 +195,9 @@ client.once(Events.ClientReady, async () => {
     }
   });
 
-  // Register slash commands after bot is ready
   await registerSlashCommands();
 });
 
-// Prefix command handler with cooldown & auto-delete spam
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
 
@@ -234,19 +219,16 @@ client.on('messageCreate', async message => {
   const command = client.prefixCommands.get(commandName);
   if (!command) return;
 
-  // Command Restriction Check
   try {
     const CommandRestrict = client.dbModels.get('CommandRestrict');
     if (CommandRestrict) {
       const restrictData = await CommandRestrict.findOne({ guildId: message.guild.id, enabled: true });
       
       if (restrictData) {
-        // Check if user is exempt from command restriction
         const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
         const hasExemptRole = restrictData.exemptRoles?.some(roleId => message.member.roles.cache.has(roleId));
         const isExemptChannel = restrictData.exemptChannels?.includes(message.channel.id);
         
-        // Allow restrict command and exempt users
         const isRestrictCommand = ['restrict', 'lockcommands', 'cmdrestrict'].includes(commandName);
         
         if (!isAdmin && !hasExemptRole && !isExemptChannel && !isRestrictCommand) {
@@ -272,32 +254,26 @@ client.on('messageCreate', async message => {
     }
   } catch (err) {
     console.error('Command restriction check error:', err);
-    // Continue with command execution if there's an error checking the restriction
   }
     
-  // Cooldown
   const now = Date.now();
-  const cooldownAmount = (config.commandCooldown || 15) * 1000; // 15 seconds
+  const cooldownAmount = (config.commandCooldown || 15) * 1000;
   if (!cooldowns.has(message.author.id)) cooldowns.set(message.author.id, new Map());
   const timestamps = cooldowns.get(message.author.id);
 
   if (timestamps.has(commandName)) {
     const expiration = timestamps.get(commandName) + cooldownAmount;
     if (now < expiration) {
-      // Delete the spam message
       if (message.deletable) await message.delete().catch(() => {});
 
-      // Optional: send a temporary warning
       return message.channel.send(`⏱️ Please wait ${((expiration - now)/1000).toFixed(1)}s before using \`${prefix}${commandName}\` again.`)
         .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
     }
   }
 
-  // Set cooldown
   timestamps.set(commandName, now);
   setTimeout(() => timestamps.delete(commandName), cooldownAmount);
 
-  // Execute the command
   try {
     console.log(`➡️ Prefix command (${prefix}): ${commandName} by ${message.author.tag}`);
     await command.execute(message, args);
@@ -306,7 +282,6 @@ client.on('messageCreate', async message => {
     if (message.channel) await message.channel.send('❌ There was an error executing that command.');
   }
 
-  // Delete original command message if possible
   try {
     if (message.deletable) await message.delete();
   } catch (err) {
@@ -314,9 +289,7 @@ client.on('messageCreate', async message => {
   }
 });
 
-// Interaction handler (buttons and slash commands)
 client.on('interactionCreate', async interaction => {
-  // Handle slash commands
   if (interaction.isChatInputCommand()) {
     const command = client.slashCommands.get(interaction.commandName);
     
@@ -343,7 +316,6 @@ client.on('interactionCreate', async interaction => {
     return;
   }
   
-  // Handle button interactions
   if (interaction.isButton()) {
     for (const [commandName, command] of client.prefixCommands) {
       if (command.handleComponent && typeof command.handleComponent === 'function') {
@@ -355,14 +327,12 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// Global error handling
 process.on('unhandledRejection', console.error);
 process.on('uncaughtException', err => { 
   console.error(err); 
   process.exit(1); 
 });
 
-// Graceful shutdown
 const gracefulExit = () => {
   console.log('Shutting down...');
   if (client.giveawayCleanup) client.giveawayCleanup.stop();
@@ -373,5 +343,4 @@ const gracefulExit = () => {
 process.on('SIGINT', gracefulExit);
 process.on('SIGTERM', gracefulExit);
 
-// Start bot
 initializeBot();
