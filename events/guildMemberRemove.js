@@ -6,7 +6,6 @@ module.exports = {
   name: Events.GuildMemberRemove,
   async execute(member) {
     try {
-      // Find the invite that brought this member
       const invite = await Invite.findOne({
         guildId: member.guild.id,
         'invitedUsers.userId': member.id,
@@ -14,7 +13,6 @@ module.exports = {
       });
       
       if (invite) {
-        // Mark the user as left
         await Invite.updateOne(
           {
             guildId: member.guild.id,
@@ -28,7 +26,6 @@ module.exports = {
           }
         );
         
-        // Update member invites summary
         await updateMemberInvites(member.guild.id, invite.memberId);
       }
     } catch (error) {
@@ -37,7 +34,5 @@ module.exports = {
   },
 };
 
-// Reuse the same function from guildMemberAdd.js
 async function updateMemberInvites(guildId, memberId) {
-  // Same implementation as in guildMemberAdd.js
 }
