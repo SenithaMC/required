@@ -1,0 +1,20 @@
+{
+  "name": "lwky.bot",
+  "author": "not_protocol",
+  "version": "1.0",
+  "description": "A Discord bot with moderation, giveaway, and invite tracking features",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.22.1",
+    "mongoose": "^8.18.3",
+    "ms": "^2.1.3",
+    "quick.db": "^9.1.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
