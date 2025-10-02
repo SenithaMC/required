@@ -5,7 +5,6 @@ module.exports = {
   name: Events.InviteDelete,
   async execute(invite) {
     try {
-      // Remove the invite from database
       await Invite.findOneAndDelete({
         guildId: invite.guild.id,
         inviteCode: invite.code
@@ -14,4 +13,5 @@ module.exports = {
       console.error('Error tracking invite deletion:', error);
     }
   },
+
 };
