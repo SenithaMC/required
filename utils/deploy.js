@@ -38,7 +38,7 @@ const getCommandFiles = (dir) => {
         commandNames.add(command.name);
 
         const commandData = {
-          name: String(command.name).toLowerCase(), // must be lowercase
+          name: String(command.name).toLowerCase(),
           description: String(command.description),
           options: Array.isArray(command.options) ? command.options : [],
         };
