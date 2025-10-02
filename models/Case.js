@@ -11,12 +11,11 @@ const caseSchema = new mongoose.Schema({
     enum: ['WARN', 'MUTE', 'KICK', 'BAN', 'UNMUTE', 'UNBAN', 'NOTE']
   },
   reason: { type: String, required: true },
-  duration: { type: Number, default: null }, // For temporary actions
+  duration: { type: Number, default: null },
   createdAt: { type: Date, default: Date.now },
-  expiresAt: { type: Date, default: null } // For automatic expiration
+  expiresAt: { type: Date, default: null }
 });
 
-// Create a compound index for efficient querying
 caseSchema.index({ guildId: 1, userId: 1 });
 caseSchema.index({ guildId: 1, caseId: 1 }, { unique: true });
 
