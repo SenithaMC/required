@@ -18,12 +18,10 @@ module.exports = {
       return message.channel.send({ embeds: [embed], ephemeral: true });
     }
 
-    // Initialize if doesn't exist
     if (!client.greetConfigs) {
       client.greetConfigs = new Map();
     }
 
-    // Show current configuration if no args
     if (!args[0]) {
       const currentConfig = client.greetConfigs.get(message.guild.id);
       
@@ -56,7 +54,6 @@ module.exports = {
       return message.channel.send({ embeds: [embed] });
     }
 
-    // Handle disable
     if (args[0].toLowerCase() === 'disable') {
       const wasEnabled = client.greetConfigs.has(message.guild.id);
       client.greetConfigs.delete(message.guild.id);
@@ -73,7 +70,6 @@ module.exports = {
       return message.channel.send({ embeds: [embed] });
     }
 
-    // Parse arguments
     const channel = message.mentions.channels.first();
     if (!channel) {
       const embed = new EmbedBuilder()
@@ -85,7 +81,7 @@ module.exports = {
       return message.channel.send({ embeds: [embed], ephemeral: true });
     }
 
-    if (channel.type !== 0) { // 0 = Text Channel
+    if (channel.type !== 0) {
       const embed = new EmbedBuilder()
         .setColor(0xFF0000)
         .setTitle('<:error:1416752161638973490> Invalid Channel Type')
@@ -95,7 +91,6 @@ module.exports = {
       return message.channel.send({ embeds: [embed], ephemeral: true });
     }
 
-    // Remove the channel mention from args and get the remaining parts
     const remainingArgs = args.slice(1);
     if (remainingArgs.length < 2) {
       const embed = new EmbedBuilder()
@@ -107,7 +102,6 @@ module.exports = {
       return message.channel.send({ embeds: [embed], ephemeral: true });
     }
 
-    // The last argument should be the time
     const timeArg = remainingArgs[remainingArgs.length - 1];
     const deleteAfter = parseInt(timeArg);
     
@@ -121,15 +115,12 @@ module.exports = {
       return message.channel.send({ embeds: [embed], ephemeral: true });
     }
 
-    // The message is everything between channel and time
     let welcomeMessage = remainingArgs.slice(0, -1).join(' ');
     
-    // Check if message contains {user} placeholder, if not, add it at the beginning
     if (!welcomeMessage.includes('{user}')) {
       welcomeMessage = `{user} ${welcomeMessage}`;
     }
 
-    // Check if bot has permission to send messages and manage messages (for deletion)
     const botPermissions = channel.permissionsFor(message.guild.members.me);
     const requiredPerms = [PermissionsBitField.Flags.SendMessages];
     if (deleteAfter > 0) {
@@ -155,7 +146,6 @@ module.exports = {
       return message.channel.send({ embeds: [embed], ephemeral: true });
     }
 
-    // Save the configuration
     client.greetConfigs.set(message.guild.id, {
       channelId: channel.id,
       message: welcomeMessage,
@@ -175,7 +165,6 @@ module.exports = {
 
     await message.channel.send({ embeds: [embed] });
     
-    // Debug log
     console.log(`Greet config set for guild ${message.guild.id}:`, {
       channel: channel.id,
       message: welcomeMessage,
