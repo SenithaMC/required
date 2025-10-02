@@ -31,7 +31,6 @@ module.exports = {
       });
     }
 
-    // Check if the target user exists in the guild
     const targetMember = await message.guild.members.fetch(targetUser.id).catch(() => null);
     if (!targetMember) {
       return message.channel.send({
@@ -43,7 +42,6 @@ module.exports = {
       });
     }
 
-    // Get the count of cases for this user
     const caseCount = await Case.countDocuments({ 
       guildId: message.guild.id, 
       userId: targetUser.id 
@@ -59,7 +57,6 @@ module.exports = {
       });
     }
 
-    // Create confirmation buttons
     const row = new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder()
@@ -147,7 +144,6 @@ module.exports = {
       await interaction.deferUpdate();
       
       try {
-        // Delete all cases for the user
         const result = await Case.deleteMany({ 
           guildId: actionData.guildId, 
           userId: actionData.targetUserId 
@@ -185,7 +181,6 @@ module.exports = {
   }
 };
 
-// Clean up expired confirmations periodically
 setInterval(() => {
   const now = Date.now();
   for (const [messageId, data] of resetConfirmations.entries()) {
