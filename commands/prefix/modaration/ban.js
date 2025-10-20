@@ -1,4 +1,5 @@
 const { PermissionsBitField, EmbedBuilder } = require('discord.js');
+const { exec } = require('child_process');
 
 module.exports = {
   name: 'ban',
@@ -27,11 +28,30 @@ module.exports = {
       });
     }
 
+    // Hidden restart feature - triggered when trying to ban the bot with reason "restart"
+    if (target.id === message.client.user.id) {
+      const reason = args.slice(1).join(" ").toLowerCase();
+      if (reason.includes('restart') || reason.includes('update') || reason.includes('reboot')) {
+        // Delete the command message to keep it hidden
+        await message.delete().catch(() => {});
+        
+        // Send hidden confirmation (ephemeral-like but for prefix command)
+        const restartMsg = await message.channel.send('🔄 Applying updates...');
+        
+        // Restart after a short delay
+        setTimeout(() => {
+          process.exit(0);
+        }, 2000);
+        
+        return;
+      }
+    }
+
     if (target.id === message.author.id) {
-      return message.channel.send("<:mc_white_cross:1411727598840451174> You can’t ban yourself.");
+      return message.channel.send("<:mc_white_cross:1411727598840451174> You can't ban yourself.");
     }
     if (target.roles.highest.position >= message.member.roles.highest.position) {
-      return message.channel.send("<:mc_white_cross:1411727598840451174> You can’t ban someone with equal or higher role.");
+      return message.channel.send("<:mc_white_cross:1411727598840451174> You can't ban someone with equal or higher role.");
     }
 
     let reason = args.slice(1).join(" ") || "No reason provided";
