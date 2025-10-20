@@ -64,7 +64,7 @@ module.exports = {
 
       const embed = new EmbedBuilder()
         .setColor(0x00FF00)
-        .setDescription(`<:mc_green_tick:1240005330024079491> You are now AFK: **${reason}**`)
+        .setDescription(`✅ You are now AFK: **${reason}**`)
         .setFooter({ text: 'You will be automatically removed from AFK when you send a message' });
 
       await message.channel.send({ embeds: [embed] });
