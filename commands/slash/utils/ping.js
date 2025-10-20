@@ -1,14 +1,11 @@
-const { EmbedBuilder, SlashCommandBuilder } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('ping')
-    .setDescription('Check bot latency.'),
-  
+  name: 'ping',
+  description: 'Check bot latency.',
+  options: [],
   async execute(interaction) {
-    await interaction.deferReply();
-    
-    const sent = await interaction.fetchReply();
+    const sent = await interaction.reply({ content: '🏓 Pinging...', fetchReply: true });
     const latency = sent.createdTimestamp - interaction.createdTimestamp;
     const wsPing = interaction.client.ws.ping;
     
@@ -21,6 +18,6 @@ module.exports = {
       )
       .setTimestamp();
     
-    await interaction.editReply({ embeds: [embed] });
+    await interaction.editReply({ content: null, embeds: [embed] });
   }
 };
