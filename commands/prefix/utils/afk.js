@@ -106,23 +106,16 @@ module.exports = {
         const embed = new EmbedBuilder()
           .setColor(0x00FF00)
           .setAuthor({ 
-            name: `${message.author.username} is back! 👋`, 
+            name: `Hey ${message.author}, welcome back!`, 
             iconURL: message.author.displayAvatarURL({ dynamic: true }) 
           })
           .setDescription(
-            `Hey ${message.author}, welcome back!\n\n` +
-            `I've removed your **AFK** status.\n` +
+            `I've removed your **AFK** status.\n\n` +
             `⏰ You were AFK for **${formattedDuration}**`
           )
           .addFields(
             { name: '💬 AFK Reason', value: afkData.reason || 'No reason provided', inline: false }
           )
-          .setTimestamp()
-          .setFooter({ 
-            text: 'Glad to have you back!', 
-            iconURL: 'https://cdn.discordapp.com/emojis/993766896325070858.webp?size=96&quality=lossless' // optional custom emoji/icon
-          });
-
 
         const msg = await message.channel.send({ embeds: [embed] });
         
