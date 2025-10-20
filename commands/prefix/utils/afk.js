@@ -3,16 +3,14 @@ const db = require('../../../utils/db');
 
 const afkCooldowns = new Map();
 
-// Main AFK command
 module.exports = {
   name: 'afk',
   description: 'Set your AFK status',
   usage: 'afk [reason]',
   async execute(message, args) {
-    // Check if user is on cooldown (prevent spam)
     if (afkCooldowns.has(message.author.id)) {
       const cooldown = afkCooldowns.get(message.author.id);
-      if (Date.now() - cooldown < 5000) { // 5 second cooldown
+      if (Date.now() - cooldown < 5000) {
         return message.channel.send({
           embeds: [
             new EmbedBuilder()
@@ -28,27 +26,23 @@ module.exports = {
     const guildId = message.guild.id;
 
     try {
-      // Check if user already has an AFK status
       const [existingAFK] = await db.pool.execute(
         'SELECT * FROM afk WHERE userId = ? AND guildId = ?',
         [userId, guildId]
       );
 
       if (existingAFK.length > 0) {
-        // Update existing AFK
         await db.pool.execute(
           'UPDATE afk SET reason = ?, createdAt = ? WHERE userId = ? AND guildId = ?',
           [reason, new Date(), userId, guildId]
         );
       } else {
-        // Insert new AFK
         await db.pool.execute(
           'INSERT INTO afk (userId, guildId, reason, createdAt) VALUES (?, ?, ?, ?)',
           [userId, guildId, reason, new Date()]
         );
       }
 
-      // Set cooldown
       afkCooldowns.set(message.author.id, Date.now());
 
       const embed = new EmbedBuilder()
@@ -70,7 +64,6 @@ module.exports = {
     }
   },
 
-  // AFK check function (to be called from message handler)
   checkAFK: async (message) => {
     if (message.author.bot || !message.guild) return;
 
@@ -97,13 +90,11 @@ module.exports = {
 
         const msg = await message.channel.send({ embeds: [embed] });
         
-        // Delete welcome back message after 10 seconds
         setTimeout(() => {
           msg.delete().catch(() => {});
         }, 10000);
       }
 
-      // Check for mentioned users who are AFK
       if (message.mentions.users.size > 0) {
         for (const [id, user] of message.mentions.users) {
           if (user.bot) continue;
@@ -122,7 +113,6 @@ module.exports = {
 
             const msg = await message.channel.send({ embeds: [embed] });
             
-            // Delete AFK notification after 15 seconds
             setTimeout(() => {
               msg.delete().catch(() => {});
             }, 15000);
