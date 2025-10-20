@@ -3,6 +3,22 @@ const db = require('../../../utils/db');
 
 const afkCooldowns = new Map();
 
+function formatDuration(ms) {
+  const seconds = Math.floor((ms / 1000) % 60);
+  const minutes = Math.floor((ms / (1000 * 60)) % 60);
+  const hours = Math.floor((ms / (1000 * 60 * 60)) % 24);
+  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+
+  const parts = [];
+  if (days > 0) parts.push(`${days} day${days > 1 ? 's' : ''}`);
+  if (hours > 0) parts.push(`${hours} hour${hours > 1 ? 's' : ''}`);
+  if (minutes > 0) parts.push(`${minutes} minute${minutes > 1 ? 's' : ''}`);
+  if (seconds > 0) parts.push(`${seconds} second${seconds > 1 ? 's' : ''}`);
+
+  if (parts.length === 0) return 'a few moments';
+  return parts.join(', ');
+}
+
 module.exports = {
   name: 'afk',
   description: 'Set your AFK status',
@@ -43,6 +59,7 @@ module.exports = {
         );
       }
 
+      // Set cooldown
       afkCooldowns.set(message.author.id, Date.now());
 
       const embed = new EmbedBuilder()
@@ -77,7 +94,10 @@ module.exports = {
       );
 
       if (afkStatus.length > 0) {
-        // Remove AFK status
+        const afkData = afkStatus[0];
+        const afkDuration = Date.now() - new Date(afkData.createdAt).getTime();
+        const formattedDuration = formatDuration(afkDuration);
+
         await db.pool.execute(
           'DELETE FROM afk WHERE userId = ? AND guildId = ?',
           [userId, guildId]
@@ -85,8 +105,8 @@ module.exports = {
 
         const embed = new EmbedBuilder()
           .setColor(0x00FF00)
-          .setDescription(`<:mc_green_tick:1240005330024079491> Welcome back ${message.author}! I've removed your AFK status.`)
-          .setFooter({ text: `You were AFK: ${afkStatus[0].reason}` });
+          .setDescription(`<:mc_green_tick:1240005330024079491> Welcome back ${message.author}! I've removed your AFK status.\n⏰ You were AFK for **${formattedDuration}**`)
+          .setFooter({ text: `AFK reason: ${afkData.reason}` });
 
         const msg = await message.channel.send({ embeds: [embed] });
         
@@ -94,7 +114,6 @@ module.exports = {
           msg.delete().catch(() => {});
         }, 10000);
       }
-
       if (message.mentions.users.size > 0) {
         for (const [id, user] of message.mentions.users) {
           if (user.bot) continue;
@@ -106,10 +125,12 @@ module.exports = {
 
           if (mentionedAFK.length > 0) {
             const afkData = mentionedAFK[0];
+            const afkDuration = Date.now() - new Date(afkData.createdAt).getTime();
+            const formattedDuration = formatDuration(afkDuration);
             
             const embed = new EmbedBuilder()
               .setColor(0xFFA500)
-              .setDescription(`**${user.tag}** is currently AFK: ${afkData.reason}\n⏰ AFK for <t:${Math.floor(new Date(afkData.createdAt).getTime() / 1000)}:R>`);
+              .setDescription(`**${user.tag}** is currently AFK: ${afkData.reason}\n⏰ AFK for **${formattedDuration}**`);
 
             const msg = await message.channel.send({ embeds: [embed] });
             
@@ -124,3 +145,12 @@ module.exports = {
     }
   }
 };
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, timestamp] of afkCooldowns.entries()) {
+    if (now - timestamp > 300000) {
+      afkCooldowns.delete(userId);
+    }
+  }
+}, 300000);
