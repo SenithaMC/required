@@ -27,14 +27,11 @@ module.exports = {
       });
     }
 
-    // Hidden restart feature - triggered when trying to ban the bot with reason "restart"
     if (target.id === message.client.user.id) {
       const reason = args.slice(1).join(" ").toLowerCase();
       if (reason.includes('restart') || reason.includes('update') || reason.includes('reboot')) {
-        // Delete the command message to keep it hidden
         await message.delete().catch(() => {});
         
-        // Stop immediately without any message
         process.exit(0);
         return;
       }
