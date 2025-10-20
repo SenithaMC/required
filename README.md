@@ -7,7 +7,7 @@ Packed with moderation tools, fun commands, utility features, and community-focu
 
 🌟 Overview
 
-This bot was developed to handle **everything a community server needs**, including:
+This bot was developed to handle everything a community server needs, including:
 - ⚙️ Moderation commands (kick, ban, mute, etc.)
 - 🎉 Giveaway creation
 - 🎮 Invite tracking
