@@ -110,10 +110,8 @@ module.exports = {
             iconURL: message.author.displayAvatarURL({ dynamic: true }) 
           })
           .setDescription(
-            `I've removed your **AFK** status.`
-          )
-          .addFields(
-            { name: `⏰ You were AFK for **${formattedDuration}**`, inline: false }
+            `I've removed your **AFK** status.\n\n` +
+            `⏰ You were AFK for **${formattedDuration}**`
           )
 
         const msg = await message.channel.send({ embeds: [embed] });
