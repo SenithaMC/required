@@ -1,6 +1,6 @@
 // Add this to your AFK command to check if table exists
 const { EmbedBuilder } = require('discord.js');
-const db = require('../../utils/db');
+const db = require('../../../utils/db');
 
 module.exports = {
   name: 'afk',
