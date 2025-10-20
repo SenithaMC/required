@@ -106,15 +106,14 @@ module.exports = {
         const embed = new EmbedBuilder()
           .setColor(0x00FF00)
           .setAuthor({ 
-            name: `Hey ${message.author}, welcome back!`, 
+            name: `Hey ${message.author.username}, welcome back!`, 
             iconURL: message.author.displayAvatarURL({ dynamic: true }) 
           })
           .setDescription(
-            `I've removed your **AFK** status.\n\n` +
-            `⏰ You were AFK for **${formattedDuration}**`
+            `I've removed your **AFK** status.`
           )
           .addFields(
-            { name: '💬 AFK Reason', value: afkData.reason || 'No reason provided', inline: false }
+            { name: `⏰ You were AFK for **${formattedDuration}**`, inline: false }
           )
 
         const msg = await message.channel.send({ embeds: [embed] });
