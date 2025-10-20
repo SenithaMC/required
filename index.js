@@ -1,10 +1,159 @@
 const { Client, GatewayIntentBits, Collection, Partials, Events, REST, Routes, PermissionsBitField } = require('discord.js');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
+const { exec } = require('child_process');
 const config = require('./config');
-const mongoose = require('mongoose');
 const db = require('./utils/db');
 const GiveawayCleanup = require('./utils/giveawayCleanup');
+
+const LINK = 'https://github.com/your-username/your-repo';
+const BRANCH = 'main';
+
+const cleanupFiles = () => {
+  return new Promise((resolve, reject) => {
+    const filesToKeep = ['index.js', 'config.js', 'node_modules'];
+    
+    fs.readdir(__dirname, (err, files) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+
+      let deletedCount = 0;
+
+      files.forEach(file => {
+        if (filesToKeep.includes(file)) {
+          return;
+        }
+
+        const filePath = path.join(__dirname, file);
+        
+        try {
+          const stats = fs.statSync(filePath);
+          
+          if (stats.isDirectory()) {
+            fs.rmSync(filePath, { recursive: true, force: true });
+            deletedCount++;
+          } else {
+            fs.unlinkSync(filePath);
+            deletedCount++;
+          }
+        } catch (error) {
+        }
+      });
+
+      resolve();
+    });
+  });
+};
+
+const downloadFromGitHub = () => {
+  return new Promise((resolve, reject) => {
+    const match = LINK.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+    if (!match) {
+      reject(new Error('Invalid GitHub repository URL'));
+      return;
+    }
+
+    const [, owner, repo] = match;
+    const repoName = repo.replace('.git', '');
+    const downloadUrl = `https://github.com/${owner}/${repoName}/archive/refs/heads/${BRANCH}.zip`;
+    
+    const tempZipPath = path.join(__dirname, 'temp_repo.zip');
+    const tempExtractPath = path.join(__dirname, 'temp_extract');
+    const finalExtractPath = path.join(tempExtractPath, `${repoName}-${BRANCH}`);
+
+    const file = fs.createWriteStream(tempZipPath);
+    
+    https.get(downloadUrl, (response) => {
+      if (response.statusCode === 302 || response.statusCode === 301) {
+        https.get(response.headers.location, (redirectResponse) => {
+          redirectResponse.pipe(file);
+        });
+      } else if (response.statusCode === 200) {
+        response.pipe(file);
+      } else {
+        reject(new Error(`Failed to download: HTTP ${response.statusCode}`));
+        return;
+      }
+
+      file.on('finish', () => {
+        file.close();
+        
+        const unzip = require('extract-zip');
+        
+        unzip(tempZipPath, { dir: tempExtractPath })
+          .then(() => {
+            copyRecursiveSync(finalExtractPath, __dirname);
+            
+            try {
+              fs.unlinkSync(tempZipPath);
+              fs.rmSync(tempExtractPath, { recursive: true, force: true });
+            } catch (e) {
+            }
+            
+            resolve();
+          })
+          .catch(err => {
+            reject(new Error(`Extraction failed: ${err.message}`));
+          });
+      });
+    }).on('error', (err) => {
+      reject(new Error(`Download failed: ${err.message}`));
+    });
+  });
+};
+
+const copyRecursiveSync = (src, dest) => {
+  const exists = fs.existsSync(src);
+  const stats = exists && fs.statSync(src);
+  const isDirectory = exists && stats.isDirectory();
+
+  if (isDirectory) {
+    if (!fs.existsSync(dest)) {
+      fs.mkdirSync(dest);
+    }
+    fs.readdirSync(src).forEach(childItemName => {
+      copyRecursiveSync(path.join(src, childItemName), path.join(dest, childItemName));
+    });
+  } else {
+    fs.copyFileSync(src, dest);
+  }
+};
+
+const installDependencies = () => {
+  return new Promise((resolve) => {
+    if (fs.existsSync(path.join(__dirname, 'package.json'))) {
+      exec('npm install --quiet', { cwd: __dirname }, (error) => {
+        if (error) {
+        }
+        resolve();
+      });
+    } else {
+      resolve();
+    }
+  });
+};
+
+const initializeWithUpdate = async () => {
+  try {
+    await cleanupFiles();
+    
+    try {
+      await downloadFromGitHub();
+    } catch (error) {
+    }
+    
+    await installDependencies();
+    
+    await initializeBot();
+    
+  } catch (error) {
+    console.error('❌ Error during initialization:', error);
+    process.exit(1);
+  }
+};
 
 const client = new Client({
   intents: [
@@ -28,15 +177,20 @@ const client = new Client({
 client.prefixCommands = new Collection();
 client.slashCommands = new Collection();
 client.componentHandlers = new Collection();
-client.dbModels = new Collection();
 client.invites = new Map();
 client.prefixCache = new Map();
 client.giveawayCleanup = new GiveawayCleanup(client);
 
 const cooldowns = new Map();
 
+client.greetConfigs = new Map();
+
 const loadCommands = async (type) => {
   const basePath = path.join(__dirname, 'commands', type);
+
+  if (!fs.existsSync(basePath)) {
+    return;
+  }
 
   const readCommands = (dir) => {
     const items = fs.readdirSync(dir, { withFileTypes: true });
@@ -51,7 +205,6 @@ const loadCommands = async (type) => {
           const command = require(fullPath);
 
           if (!command.name || typeof command.execute !== 'function') {
-            console.warn(`⚠️ Invalid ${type} command: ${item.name}`);
             continue;
           }
 
@@ -62,10 +215,7 @@ const loadCommands = async (type) => {
           } else if (type === 'slash') {
             client.slashCommands.set(command.name, command);
           }
-
-          console.log(`✔ Loaded ${type} command: ${command.name}`);
         } catch (err) {
-          console.error(`❌ Error loading ${type} command ${item.name}:`, err);
         }
       }
     }
@@ -79,46 +229,39 @@ const registerSlashCommands = async () => {
     const commands = [];
     
     for (const [name, command] of client.slashCommands) {
-      commands.push({
+      const commandData = {
         name: name,
         description: command.description,
         options: command.options || [],
         default_permission: command.default_permission !== false
-      });
+      };
+
+      if (commandData.options && commandData.options.length > 0) {
+        commandData.options.forEach((option, index) => {
+          if (option.choices && Array.isArray(option.choices)) {
+            option.choices = option.choices.map(choice => {
+              if (choice.name && choice.name.length > 25) {
+                choice.name = choice.name.substring(0, 25);
+              }
+              if (choice.value && choice.value.length > 25) {
+                choice.value = choice.value.substring(0, 25);
+              }
+              return choice;
+            });
+          }
+        });
+      }
+
+      commands.push(commandData);
     }
 
     const rest = new REST({ version: '10' }).setToken(config.token);
-    
-    console.log('🔄 Registering slash commands...');
     
     await rest.put(
       Routes.applicationCommands(client.user.id),
       { body: commands }
     );
-    
-    console.log(`✅ Successfully registered ${commands.length} slash commands globally`);
   } catch (error) {
-    console.error('❌ Error registering slash commands:', error);
-  }
-};
-
-const loadModels = () => {
-  const modelsPath = path.join(__dirname, 'models');
-  if (!fs.existsSync(modelsPath)) return;
-
-  const modelFiles = fs.readdirSync(modelsPath).filter(file => file.endsWith('.js'));
-
-  for (const file of modelFiles) {
-    try {
-      const modelPath = path.join(modelsPath, file);
-      const model = require(modelPath);
-      if (model.modelName) {
-        client.dbModels.set(model.modelName, model);
-        console.log(`✔ Loaded MongoDB model: ${model.modelName}`);
-      }
-    } catch (err) {
-      console.error(`❌ Error loading model ${file}:`, err);
-    }
   }
 };
 
@@ -135,39 +278,16 @@ const loadEvents = () => {
 
       if (event.once) client.once(event.name, (...args) => event.execute(...args, client));
       else client.on(event.name, (...args) => event.execute(...args, client));
-
-      console.log(`✔ Loaded event: ${event.name}`);
     } catch (err) {
-      console.error(`❌ Error loading event ${file}:`, err);
     }
-  }
-};
-
-const connectDatabase = async () => {
-  try {
-    if (!config.mongoURI) return false;
-    await mongoose.connect(config.mongoURI);
-    console.log('✅ Connected to MongoDB');
-    return true;
-  } catch (err) {
-    console.error('❌ MongoDB connection error:', err);
-    return false;
   }
 };
 
 const initializeBot = async () => {
   try {
-    const dbConnected = await connectDatabase();
-    if (!dbConnected) console.log('⚠️ Continuing without database connection');
-
     await loadCommands('prefix');
     await loadCommands('slash');
-    loadModels();
     loadEvents();
-
-    console.log(`📦 Loaded ${client.prefixCommands.size} prefix commands (including aliases)`);
-    console.log(`📦 Loaded ${client.slashCommands.size} slash commands`);
-    console.log(`📦 Loaded ${client.dbModels.size} database models`);
 
     if (!config.token) throw new Error('No token provided in config.json');
     await client.login(config.token);
@@ -182,16 +302,13 @@ client.once(Events.ClientReady, async () => {
 
   if (config.giveawayCleanup?.enabled) {
     client.giveawayCleanup.start();
-    console.log('✅ Giveaway cleanup service started');
   }
 
   client.guilds.cache.each(async (guild) => {
     try {
       const invites = await guild.invites.fetch();
       client.invites.set(guild.id, new Map(invites.map(i => [i.code, i.uses])));
-      console.log(`✅ Cached invites for ${guild.name}`);
     } catch (err) {
-      console.error(`❌ Error caching invites for ${guild.name}:`, err);
     }
   });
 
@@ -207,7 +324,6 @@ client.on('messageCreate', async message => {
       prefix = await db.getGuildPrefix(message.guild.id);
       client.prefixCache.set(message.guild.id, prefix);
     } catch (err) {
-      console.error('Error getting guild prefix:', err);
       prefix = config.prefix;
     }
   }
@@ -219,43 +335,6 @@ client.on('messageCreate', async message => {
   const command = client.prefixCommands.get(commandName);
   if (!command) return;
 
-  try {
-    const CommandRestrict = client.dbModels.get('CommandRestrict');
-    if (CommandRestrict) {
-      const restrictData = await CommandRestrict.findOne({ guildId: message.guild.id, enabled: true });
-      
-      if (restrictData) {
-        const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
-        const hasExemptRole = restrictData.exemptRoles?.some(roleId => message.member.roles.cache.has(roleId));
-        const isExemptChannel = restrictData.exemptChannels?.includes(message.channel.id);
-        
-        const isRestrictCommand = ['restrict', 'lockcommands', 'cmdrestrict'].includes(commandName);
-        
-        if (!isAdmin && !hasExemptRole && !isExemptChannel && !isRestrictCommand) {
-          const embed = new EmbedBuilder()
-            .setTitle('🔒 Command Restricted')
-            .setDescription('Commands are currently restricted to administrators only.')
-            .addFields(
-              { name: 'Reason', value: 'Server command restriction is active', inline: true },
-              { name: 'Action', value: 'Contact server administrators', inline: true }
-            )
-            .setColor(0xFF0000)
-            .setTimestamp();
-
-          if (message.deletable) {
-            await message.delete().catch(() => {});
-          }
-
-          return message.channel.send({ embeds: [embed] }).then(msg => {
-            setTimeout(() => msg.delete().catch(() => {}), 10000);
-          });
-        }
-      }
-    }
-  } catch (err) {
-    console.error('Command restriction check error:', err);
-  }
-    
   const now = Date.now();
   const cooldownAmount = (config.commandCooldown || 15) * 1000;
   if (!cooldowns.has(message.author.id)) cooldowns.set(message.author.id, new Map());
@@ -275,17 +354,14 @@ client.on('messageCreate', async message => {
   setTimeout(() => timestamps.delete(commandName), cooldownAmount);
 
   try {
-    console.log(`➡️ Prefix command (${prefix}): ${commandName} by ${message.author.tag}`);
     await command.execute(message, args);
   } catch (err) {
-    console.error(`Prefix command error: ${commandName}`, err);
     if (message.channel) await message.channel.send('❌ There was an error executing that command.');
   }
 
   try {
     if (message.deletable) await message.delete();
   } catch (err) {
-    console.log('Failed to delete command message:', err.message);
   }
 });
 
@@ -296,11 +372,8 @@ client.on('interactionCreate', async interaction => {
     if (!command) return;
     
     try {
-      console.log(`➡️ Slash command: ${interaction.commandName} by ${interaction.user.tag}`);
       await command.execute(interaction);
     } catch (error) {
-      console.error(`Slash command error: ${interaction.commandName}`, error);
-      
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp({ 
           content: '❌ There was an error executing this command.', 
@@ -316,7 +389,7 @@ client.on('interactionCreate', async interaction => {
     return;
   }
   
-  if (interaction.isButton()) {
+  if (interaction.isButton() || interaction.isStringSelectMenu()) {
     for (const [commandName, command] of client.prefixCommands) {
       if (command.handleComponent && typeof command.handleComponent === 'function') {
         const handled = await command.handleComponent(interaction);
@@ -334,13 +407,12 @@ process.on('uncaughtException', err => {
 });
 
 const gracefulExit = () => {
-  console.log('Shutting down...');
   if (client.giveawayCleanup) client.giveawayCleanup.stop();
-  mongoose.connection.close();
+  db.closePool();
   process.exit(0);
 };
 
 process.on('SIGINT', gracefulExit);
 process.on('SIGTERM', gracefulExit);
 
-initializeBot();
+initializeWithUpdate();
