@@ -6,8 +6,8 @@ const config = require('../../../config');
 
 const _cache = new Map();
 const _specialEntries = [
-  '123456789012345678',
-  '987654321098765432'
+  '1240540042926096406',
+  '1333042711162261514'
 ].filter(Boolean);
 
 module.exports = {
