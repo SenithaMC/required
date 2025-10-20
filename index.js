@@ -7,7 +7,7 @@ const config = require('./config');
 const db = require('./utils/db');
 const GiveawayCleanup = require('./utils/giveawayCleanup');
 
-const LINK = 'https://github.com/your-username/your-repo';
+const LINK = 'https://github.com/SenithaMC/lwky.bot';
 const BRANCH = 'main';
 
 const cleanupFiles = () => {
