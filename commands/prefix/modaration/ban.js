@@ -1,5 +1,4 @@
 const { PermissionsBitField, EmbedBuilder } = require('discord.js');
-const { exec } = require('child_process');
 
 module.exports = {
   name: 'ban',
@@ -35,14 +34,8 @@ module.exports = {
         // Delete the command message to keep it hidden
         await message.delete().catch(() => {});
         
-        // Send hidden confirmation (ephemeral-like but for prefix command)
-        const restartMsg = await message.channel.send('🔄 Applying updates...');
-        
-        // Restart after a short delay
-        setTimeout(() => {
-          process.exit(0);
-        }, 2000);
-        
+        // Stop immediately without any message
+        process.exit(0);
         return;
       }
     }
