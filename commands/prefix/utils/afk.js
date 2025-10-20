@@ -132,9 +132,11 @@ module.exports = {
     } catch (error) {
       console.error('Error checking AFK status:', error);
     }
-  },
+  }
+};
 
-  // Command to view AFK users
+// Separate command for AFK list
+const afkListCommand = {
   name: 'afklist',
   description: 'View all AFK users in the server',
   usage: 'afklist [page]',
@@ -162,12 +164,11 @@ async function sendAFKListPage(message, guildId, page = 1) {
   const skip = (page - 1) * limit;
 
   try {
+    // Fixed query - no JOIN with users table
     const [afkUsers] = await db.pool.execute(
-      `SELECT afk.*, users.username, users.discriminator 
-       FROM afk 
-       LEFT JOIN users ON afk.userId = users.id 
-       WHERE afk.guildId = ? 
-       ORDER BY afk.createdAt DESC 
+      `SELECT * FROM afk 
+       WHERE guildId = ? 
+       ORDER BY createdAt DESC 
        LIMIT ? OFFSET ?`,
       [guildId, limit, skip]
     );
@@ -192,11 +193,22 @@ async function sendAFKListPage(message, guildId, page = 1) {
       return message.channel.send({ embeds: [embed] });
     }
 
-    const afkList = afkUsers.map(afk => {
-      const timeAgo = `<t:${Math.floor(new Date(afk.createdAt).getTime() / 1000)}:R>`;
-      const userTag = afk.username && afk.discriminator ? `${afk.username}#${afk.discriminator}` : `User ID: ${afk.userId}`;
-      return `• **${userTag}** - ${afk.reason}\n  ⏰ ${timeAgo}`;
-    }).join('\n\n');
+    // Build AFK list using Discord.js to fetch user information
+    const afkList = [];
+    for (const afk of afkUsers) {
+      try {
+        const user = await message.client.users.fetch(afk.userId).catch(() => null);
+        const userTag = user ? user.tag : `Unknown User (${afk.userId})`;
+        const timeAgo = `<t:${Math.floor(new Date(afk.createdAt).getTime() / 1000)}:R>`;
+        afkList.push(`• **${userTag}** - ${afk.reason}\n  ⏰ ${timeAgo}`);
+      } catch (error) {
+        // If user can't be fetched, use fallback
+        const timeAgo = `<t:${Math.floor(new Date(afk.createdAt).getTime() / 1000)}:R>`;
+        afkList.push(`• **User ID: ${afk.userId}** - ${afk.reason}\n  ⏰ ${timeAgo}`);
+      }
+    }
+
+    const formattedList = afkList.join('\n\n');
 
     const buttons = new ActionRowBuilder();
     
@@ -219,7 +231,7 @@ async function sendAFKListPage(message, guildId, page = 1) {
     const embed = new EmbedBuilder()
       .setColor(0x0099FF)
       .setTitle(`AFK Users - ${message.guild.name}`)
-      .setDescription(afkList)
+      .setDescription(formattedList)
       .setFooter({ text: `Page ${page} of ${totalPages} • ${totalAFK} user${totalAFK !== 1 ? 's' : ''} AFK` })
       .setTimestamp();
 
@@ -243,3 +255,6 @@ setInterval(() => {
     }
   }
 }, 300000);
+
+// Export both commands
+module.exports = [module.exports, afkListCommand];
