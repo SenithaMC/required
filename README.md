@@ -1,7 +1,7 @@
 🤖 LWKY Discord Bot
 
 A multifunction Discord bot built by NotProtocol with ❤️ for the LWKY Community.  
-Packed with moderation tools, fun commands, utility features, and community-focused functions — all designed to make your Discord server smoother, safer, and more entertaining.
+Packed with moderation tools, invite tracking, utility features, and community-focused functions — all designed to make your Discord server smoother, safer, and more entertaining.
 
 ---
 
