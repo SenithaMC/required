@@ -1,7 +1,7 @@
 {
   "name": "lwky.bot",
   "author": "not_protocol",
-  "version": "2.4",
+  "version": "2.5",
   "description": "A multifunction discord bot made for lwky community.",
   "main": "index.js",
   "scripts": {
