@@ -323,7 +323,7 @@ module.exports = {
                 { name: `\`${prefix}restrict\``, description: 'Restrict all commands for non-admin members' },
                 { name: `\`${prefix}mute\``, description: 'Mute a user in the server' }
             ],
-            staffOnly: true
+            staffOnly: false
         },
         utility: {
             name: '**<:wrench:1429902609879273472> Utility Commands**',
