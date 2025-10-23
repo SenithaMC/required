@@ -155,14 +155,6 @@ module.exports = {
 
       this.createGiveawayCollector(giveawayMessage, giveawayId, duration);
 
-      await message.channel.send({
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0x00FF00)
-            .setDescription(`✅ Giveaway created successfully! [Jump to giveaway](${giveawayMessage.url})`)
-        ]
-      });
-
     } catch (error) {
       console.error('Error creating giveaway:', error);
       await message.channel.send({
@@ -190,7 +182,14 @@ module.exports = {
           [giveawayId]
         );
         
-        if (giveawayRows.length === 0) return;
+        if (giveawayRows.length === 0) {
+          return i.reply({
+            content: 'This giveaway has already ended.',
+            ephemeral: true,
+            allowedMentions: { repliedUser: false }
+          });
+        }
+        
         const giveaway = giveawayRows[0];
         
         if (giveaway.role !== i.guild.roles.everyone.id) {
@@ -372,7 +371,7 @@ module.exports = {
 
   async restoreActiveGiveaways(client) {
     try {
-      console.log('Restoring active giveaways...');
+      console.log('🔄 Restoring active giveaways...');
       
       const [activeGiveaways] = await db.pool.execute(
         'SELECT * FROM giveaways WHERE ended = FALSE AND endTime > NOW()'
@@ -384,17 +383,19 @@ module.exports = {
         try {
           const channel = await client.channels.fetch(giveaway.channelId).catch(() => null);
           if (!channel) {
-            console.log(`Channel ${giveaway.channelId} not found for giveaway ${giveaway.id}`);
+            console.log(`❌ Channel ${giveaway.channelId} not found for giveaway ${giveaway.id}`);
             continue;
           }
 
           const message = await channel.messages.fetch(giveaway.messageId).catch(() => null);
           if (!message) {
-            console.log(`Message ${giveaway.messageId} not found for giveaway ${giveaway.id}`);
+            console.log(`❌ Message ${giveaway.messageId} not found for giveaway ${giveaway.id}`);
             continue;
           }
 
-          const remainingTime = new Date(giveaway.endTime).getTime() - Date.now();
+          const endTime = new Date(giveaway.endTime).getTime();
+          const remainingTime = endTime - Date.now();
+          
           if (remainingTime <= 0) {
             await this.endGiveaway(message, giveaway.id);
             continue;
@@ -402,18 +403,19 @@ module.exports = {
 
           this.createGiveawayCollector(message, giveaway.id, remainingTime);
           restoredCount++;
+          console.log(`✅ Restored giveaway ${giveaway.id} with ${remainingTime}ms remaining`);
           
         } catch (error) {
-          console.error(`Failed to restore giveaway ${giveaway.id}:`, error);
+          console.error(`❌ Failed to restore giveaway ${giveaway.id}:`, error);
         }
       }
 
-      console.log(`Restored ${restoredCount} active giveaways`);
+      console.log(`✅ Restored ${restoredCount} active giveaways`);
       
       await this.cleanupExpiredGiveaways(client);
       
     } catch (error) {
-      console.error('Error restoring active giveaways:', error);
+      console.error('❌ Error restoring active giveaways:', error);
     }
   },
 
@@ -432,12 +434,13 @@ module.exports = {
           if (!message) continue;
 
           await this.endGiveaway(message, giveaway.id);
+          console.log(`✅ Cleaned up expired giveaway ${giveaway.id}`);
         } catch (error) {
-          console.error(`Failed to cleanup expired giveaway ${giveaway.id}:`, error);
+          console.error(`❌ Failed to cleanup expired giveaway ${giveaway.id}:`, error);
         }
       }
     } catch (error) {
-      console.error('Error cleaning up expired giveaways:', error);
+      console.error('❌ Error cleaning up expired giveaways:', error);
     }
   },
   
