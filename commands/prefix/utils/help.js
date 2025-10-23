@@ -82,7 +82,7 @@ module.exports = {
             usage: `${prefix}gcreate [no-of-winners] <prize> <time> [@role]`,
             category: 'Giveaways',
             aliases: [],
-            staffOnly: false,
+            staffOnly: true,
             details: 'Starts a new giveaway in the server. Allows setting the number of winners, the prize, the duration, and optionally restricting participation to a specific role.'
         },
         greroll: {
@@ -91,7 +91,7 @@ module.exports = {
             usage: `${prefix}greroll <message-id> [winners]`,
             category: 'Utility',
             aliases: [],
-            staffOnly: false,
+            staffOnly: true,
             details: 'Selects new winners for an already ended giveaway. Requires the giveaway message ID and optionally the number of winners to reroll.'
         },
         gend: {
@@ -100,7 +100,7 @@ module.exports = {
             usage: `${prefix}gend <message-id> [winners]`,
             category: 'Utility',
             aliases: [],
-            staffOnly: false,
+            staffOnly: true,
             details: 'Ends a running giveaway immediately. Allows specifying the number of winners, and announces the winners once ended.'
         },
         invites: {
