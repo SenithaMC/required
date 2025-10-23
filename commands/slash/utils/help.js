@@ -237,15 +237,6 @@ module.exports = {
           staffOnly: true,
           details: 'Restrict all bot commands to administrators only, with optional role/channel exemptions.'
       },
-      calculate: {
-          name: 'calculate',
-          description: 'Performs mathematical calculations: +, -, *, /, %, ^, √, ² etc.',
-          usage: `${prefix}calculate <expression>`,
-          category: 'Utility',
-          aliases: ['calc'],
-          staffOnly: false,
-          details: 'Evaluates mathematical expressions using basic arithmetic operations and functions like square root and exponentiation.'
-      },
       afk: {
           name: 'afk',
           description: 'Set your AFK (Away From Keyboard) status',
@@ -320,8 +311,7 @@ module.exports = {
                 { name: `\`${prefix}purge\``, description: `Delete a specified number of recent messages in a channel.` },
                 { name: `\`${prefix}nuke\``, description: `Completely clears a channel by cloning and deleting it.` },
                 { name: `\`${prefix}greet\``, description: `Set a channel for automatic welcome messages when users join the server` },
-                {name: `\`${prefix}calculate\``, description: 'Performs mathematical calculations: +, -, *, /, %, ^, √, ² etc.' },
-                {name: `\`${prefix}afk\``, description: 'Set your AFK (Away From Keyboard) status' }
+                { name: `\`${prefix}afk\``, description: 'Set your AFK (Away From Keyboard) status' }
             ],
             staffOnly: false
         }
