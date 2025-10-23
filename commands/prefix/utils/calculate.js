@@ -4,14 +4,15 @@ module.exports = {
     name: "calculate",
     aliases: ["calc", "math"],
     description: "Performs mathematical calculations with support for basic operations and functions",
-    usage: "calculate <expression> | Examples: `2+2`, `5*3/2`, `2^8`, `sqrt(16)`",
+    usage: "`calculate <expression>`",
+    examples: "`2+2`, `5*3/2`, `2^8`, `sqrt(16)`"
 
     async execute(message, args) {
         if (!args.length) {
             const helpEmbed = new EmbedBuilder()
                 .setColor(0xFF6B6B)
                 .setTitle('🧮 Calculator')
-                .setDescription(`**Usage:** \`${this.usage}\``)
+                .setDescription(`**Usage:** \`${this.usage}\`\n**Examples:** \`${this.examples}\``)
                 .addFields(
                     { name: 'Basic Operations', value: '`+` `-` `*` `/` `%` `^`', inline: true },
                     { name: 'Advanced', value: '`√()` `²` `³` `π`', inline: true },
