@@ -1,9 +1,6 @@
-const { EmbedBuilder, PermissionsBitField } = require('discord.js');
+const { EmbedBuilder, PermissionsBitField, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const config = require('../../../config');
 const db = require('../../../utils/db');
-const gcreate = require('../giveaway/gcreate');
-const leaderboard = require('../invites/leaderboard');
-const restrict = require('../modaration/restrict');
 
 module.exports = {
   name: 'help',
@@ -12,7 +9,6 @@ module.exports = {
 
   async execute(message, args) {
     const isStaff = message.member.permissions.has(PermissionsBitField.Flags.ManageMessages);
-
     const guildPrefix = await db.getGuildPrefix(message.guild.id);
     const prefix = guildPrefix || config.prefix;
 
@@ -109,7 +105,7 @@ module.exports = {
         },
         invites: {
             name: 'invites',
-            description: 'Check your or another user’s invite statistics.',
+            description: 'Check your or another user\'s invite statistics.',
             usage: `${prefix}invites [@user]`,
             category: 'Invites',
             aliases: [],
@@ -123,7 +119,7 @@ module.exports = {
             category: 'Invites',
             aliases: [],
             staffOnly: false,
-            details: 'Shows the member who invited a user, along with the inviter’s invite statistics.'
+            details: 'Shows the member who invited a user, along with the inviter\'s invite statistics.'
         },
         invitecodes: {
             name: 'invitecodes',
@@ -136,7 +132,7 @@ module.exports = {
         },
         leaderboard: {
             name: 'leaderboard',
-            description: 'View the server’s invite leaderboard.',
+            description: 'View the server\'s invite leaderboard.',
             usage: `${prefix}leaderboard [page]`,
             category: 'Invites',
             aliases: ['lb', 'top'],
@@ -186,7 +182,7 @@ module.exports = {
             category: 'Utility',
             aliases: [],
             staffOnly: true,
-            details: 'This will wipe the entire channel’s messages by recreating it.'
+            details: 'This will wipe the entire channel\'s messages by recreating it.'
         },
         cremove: {
             name: 'cremove',
@@ -277,6 +273,24 @@ module.exports = {
             aliases: ['calc', 'math'],
             staffOnly: false,
             details: 'Evaluates mathematical expressions using basic arithmetic operations and functions like square root and exponentiation.'
+        },
+        messages: {
+            name: 'messages',
+            description: 'Show your message count in this server',
+            usage: `${prefix}messages [@user]`,
+            category: 'Utility',
+            aliases: ['msgcount', 'messagecount'],
+            staffOnly: false,
+            details: 'Shows the total number of messages you or another user have sent in this server.'
+        },
+        rmsg: {
+            name: 'rmsg',
+            description: 'Reset message counters for users or the entire server',
+            usage: `${prefix}rmsg [@user/@role]`,
+            category: 'Utility',
+            aliases: ['resetmessages', 'clearmessages'],
+            staffOnly: true,
+            details: 'Resets message counters for specific users, roles, or the entire server. Requires Manage Messages permission.'
         }
     };
 
@@ -286,7 +300,7 @@ module.exports = {
       const command = commandDetails[query];
 
       if (command.staffOnly && !isStaff) {
-        return message.channel.send('❌ You don’t have permission to view this command.');
+        return message.channel.send('❌ You don\'t have permission to view this command.');
       }
 
       const embed = new EmbedBuilder()
@@ -306,88 +320,199 @@ module.exports = {
     }
 
     const commandCategories = {
+        main: {
+            name: 'Main Menu',
+            description: 'Select a category from the dropdown below to explore commands',
+            emoji: '🏠',
+            color: 0x5865F2
+        },
         moderation: {
-            name: '**<a:thunder:1430965977436127375> Moderation Commands**',
-            description: 'Commands for server moderation (Staff only)',
-            commands: [
-                { name: `\`${prefix}kick\``, description: 'Kick a user from the server' },
-                { name: `\`${prefix}ban\``, description: 'Ban a user from the server' },
-                { name: `\`${prefix}tempban\``, description: 'Temporarily ban a user' },
-                { name: `\`${prefix}lock\``, description: 'Lock a channel' },
-                { name: `\`${prefix}unlock\``, description: 'Unlock a channel' },
-                { name: `\`${prefix}massban\``, description: 'Ban all members with a specific role at once.' },
-                { name: `\`${prefix}masskick\``, description: 'Kick all members with a specific role at once.' },
-                { name: `\`${prefix}warn\``, description: 'Issue a warning to a member.' },
-                { name: `\`${prefix}cases\``, description: 'View all cases for a user' },
-                { name: `\`${prefix}cremove\``, description: 'Reset all cases for a user.' },
-                { name: `\`${prefix}restrict\``, description: 'Restrict all commands for non-admin members' },
-                { name: `\`${prefix}mute\``, description: 'Mute a user in the server' }
-            ],
-            staffOnly: false
+            name: 'Moderation Commands',
+            description: 'Commands for server moderation and management',
+            emoji: '🛡️',
+            color: 0xFF0000,
+            staffOnly: true
         },
         utility: {
-            name: '**<:wrench:1429902609879273472> Utility Commands**',
-            description: 'General utility commands',
-            commands: [
-                { name: `\`${prefix}help\``, description: 'Show this help menu' },
-                { name: `\`${prefix}ping\``, description: 'Check bot latency' },
-                { name: `\`${prefix}purge\``, description: `Delete a specified number of recent messages in a channel.` },
-                { name: `\`${prefix}nuke\``, description: `Completely clears a channel by cloning and deleting it.` },
-                { name: `\`${prefix}greet\``, description: `Set a channel for welcome messages when users join the server` },
-                { name: `\`${prefix}everyone\``, description: `Ghost ping every user in the server` },
-                { name: `\`${prefix}notify\``, description: `Send a direct message notification to a user, role, or everyone.` },
-                { name: `\`${prefix}greet\``, description: 'Set a channel for welcome messages when users join the server' },
-                { name: `\`${prefix}everyone\``, description: 'Ghost ping every user in the server' },
-                { name: `\`${prefix}afk\``, description: 'Set your AFK (Away From Keyboard) status' },
-                { name: `\`${prefix}afklist\``, description: 'View a list of all members currently marked as AFK in the server' },
-                { name: `\`${prefix}calculate\``, description: 'Performs mathematical calculations: +, -, *, /, %, ^, √, ² etc.' }
-            ],
-            staffOnly: false
+            name: 'Utility Commands',
+            description: 'General utility and fun commands',
+            emoji: '🔧',
+            color: 0x00FF00
         },
         giveaways: {
-            name: '**<:tada:1429902576790409327> Giveaways**',
-            description: 'Commands to manage giveaways',
-            commands: [
-                { name: `\`${prefix}gcreate\``, description: 'Create a new giveaway' },
-                { name: `\`${prefix}greroll\``, description: 'Reroll winners for a giveaway' },
-                { name: `\`${prefix}gend\``, description: 'End a giveaway immediately' }
-            ],
-            staffOnly: false
+            name: 'Giveaway Commands',
+            description: 'Commands to create and manage giveaways',
+            emoji: '🎉',
+            color: 0xFFD700
         },
         invites: {
-            name: '**<:book_n_quill:1429902883574386789> Invites**',
-            description: 'Commands to manage and view invites',
-            commands: [
-                { name: `\`${prefix}invites\``, description: `Check your or another user’s invite statistics.` },
-                { name: `\`${prefix}inviter\``, description: `See who invited a specific user.` },
-                { name: `\`${prefix}invitecodes\``, description: `List all invite codes created by a user.` },
-                { name: `\`${prefix}leaderboard\``, description: `View the server’s invite leaderboard.` }
-            ],
-            staffOnly: false
+            name: 'Invite Commands',
+            description: 'Commands to manage and track server invites',
+            emoji: '📖',
+            color: 0x9C27B0
         }
     };
 
-    const embed = new EmbedBuilder()
-        .setTitle(`${config.bot_name} - Help Menu`)
-        .setDescription(`**Prefix for this guild:** \`${prefix}\`\nUse \`${prefix}help [command]\` to get info on a specific command.`)
-        .setColor(0x5865F2)
-        .setFooter({ 
-            text: `${config.bot_name} • Help`, 
-            iconURL: message.client.user.displayAvatarURL({ dynamic: true })
-        })
-        .setTimestamp();
+    const createMainEmbed = () => {
+        return new EmbedBuilder()
+            .setTitle(`${config.bot_name} - Help Menu`)
+            .setDescription(`**Prefix for this guild:** \`${prefix}\`\n**Total Commands:** ${Object.keys(commandDetails).length}\n\nSelect a category from the dropdown below to explore commands!`)
+            .addFields(
+                { 
+                    name: '📖 How to use', 
+                    value: `• Use \`${prefix}help [command]\` for specific command info\n• Navigate categories using the dropdown\n• Staff commands are marked with 🔒`, 
+                    inline: false 
+                },
+                { 
+                    name: '🔧 Quick Access', 
+                    value: `• **Utility**: \`${prefix}ping\`, \`${prefix}afk\`, \`${prefix}calculate\`\n• **Giveaways**: \`${prefix}gcreate\`, \`${prefix}greroll\`\n• **Invites**: \`${prefix}invites\`, \`${prefix}leaderboard\``, 
+                    inline: false 
+                }
+            )
+            .setColor(commandCategories.main.color)
+            .setFooter({ 
+                text: `${config.bot_name} • Help Menu`, 
+                iconURL: message.client.user.displayAvatarURL({ dynamic: true })
+            })
+            .setTimestamp();
+    };
 
-    for (const [key, category] of Object.entries(commandCategories)) {
-        if (category.staffOnly && !isStaff) continue;
+    const createCategoryEmbed = (categoryKey) => {
+        const category = commandCategories[categoryKey];
+        const commands = getCommandsByCategory(categoryKey);
         
-        const commandList = category.commands.map(cmd => `• ${cmd.name} - ${cmd.description}`).join('\n');
-        embed.addFields({ 
-            name: category.name, 
-            value: `${category.description}\n${commandList}`,
-            inline: false 
-        });
-    }
+        const embed = new EmbedBuilder()
+            .setTitle(`${category.emoji} ${category.name}`)
+            .setDescription(category.description)
+            .setColor(category.color)
+            .setFooter({ 
+                text: `${config.bot_name} • ${category.name}`, 
+                iconURL: message.client.user.displayAvatarURL({ dynamic: true })
+            })
+            .setTimestamp();
 
-    return message.channel.send({ embeds: [embed] });
+        if (commands.length === 0) {
+            embed.addFields({
+                name: 'No Commands',
+                value: 'There are no commands available in this category for your permission level.',
+                inline: false
+            });
+        } else {
+            const chunkSize = 8;
+            for (let i = 0; i < commands.length; i += chunkSize) {
+                const chunk = commands.slice(i, i + chunkSize);
+                const commandList = chunk.map(cmd => {
+                    const staffIcon = cmd.staffOnly && isStaff ? ' 🔒' : '';
+                    return `• \`${cmd.usage.split(' ')[0]}\` - ${cmd.description}${staffIcon}`;
+                }).join('\n');
+                
+                embed.addFields({
+                    name: i === 0 ? `Commands (${commands.length})` : '\u200b',
+                    value: commandList,
+                    inline: false
+                });
+            }
+        }
+
+        return embed;
+    };
+
+    const getCommandsByCategory = (categoryKey) => {
+        const categoryMap = {
+            moderation: ['kick', 'ban', 'tempban', 'lock', 'unlock', 'massban', 'masskick', 'warn', 'cases', 'cremove', 'restrict', 'mute', 'everyone'],
+            utility: ['ping', 'help', 'purge', 'nuke', 'greet', 'notify', 'afk', 'afklist', 'calculate', 'messages', 'rmsg'],
+            giveaways: ['gcreate', 'greroll', 'gend'],
+            invites: ['invites', 'inviter', 'invitecodes', 'leaderboard']
+        };
+
+        const commandKeys = categoryMap[categoryKey] || [];
+        return commandKeys
+            .map(key => commandDetails[key])
+            .filter(cmd => cmd && (!cmd.staffOnly || isStaff));
+    };
+
+    const createDropdown = () => {
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId('help_category')
+            .setPlaceholder('🏠 Select a category...')
+            .addOptions(
+                new StringSelectMenuOptionBuilder()
+                    .setLabel('Main Menu')
+                    .setDescription('Return to the main help menu')
+                    .setValue('main')
+                    .setEmoji('🏠'),
+                new StringSelectMenuOptionBuilder()
+                    .setLabel('Moderation')
+                    .setDescription('Server moderation commands')
+                    .setValue('moderation')
+                    .setEmoji('🛡️'),
+                new StringSelectMenuOptionBuilder()
+                    .setLabel('Utility')
+                    .setDescription('General utility commands')
+                    .setValue('utility')
+                    .setEmoji('🔧'),
+                new StringSelectMenuOptionBuilder()
+                    .setLabel('Giveaways')
+                    .setDescription('Giveaway management commands')
+                    .setValue('giveaways')
+                    .setEmoji('🎉'),
+                new StringSelectMenuOptionBuilder()
+                    .setLabel('Invites')
+                    .setDescription('Invite tracking commands')
+                    .setValue('invites')
+                    .setEmoji('📖')
+            );
+
+        return new ActionRowBuilder().addComponents(selectMenu);
+    };
+
+    const helpMessage = await message.channel.send({
+        embeds: [createMainEmbed()],
+        components: [createDropdown()]
+    });
+
+    const collector = helpMessage.createMessageComponentCollector({
+        filter: i => i.user.id === message.author.id && i.customId === 'help_category',
+        time: 60000
+    });
+
+    collector.on('collect', async i => {
+        await i.deferUpdate();
+        
+        const selectedCategory = i.values[0];
+        const embed = selectedCategory === 'main' 
+            ? createMainEmbed() 
+            : createCategoryEmbed(selectedCategory);
+
+        await helpMessage.edit({ embeds: [embed] });
+    });
+
+    collector.on('end', async () => {
+        try {
+            const disabledDropdown = new ActionRowBuilder().addComponents(
+                new StringSelectMenuBuilder()
+                    .setCustomId('help_category_expired')
+                    .setPlaceholder('❌ Menu expired - use help command again')
+                    .setDisabled(true)
+                    .addOptions(
+                        new StringSelectMenuOptionBuilder()
+                            .setLabel('Menu Expired')
+                            .setValue('expired')
+                            .setEmoji('⏰')
+                    )
+            );
+
+            await helpMessage.edit({ components: [disabledDropdown] });
+        } catch (error) {
+            console.error('Error disabling help menu:', error);
+        }
+    });
+  },
+
+  handleComponent: async (interaction) => {
+    if (interaction.customId === 'help_category') {
+      return true;
+    }
+    return false;
   }
 };
