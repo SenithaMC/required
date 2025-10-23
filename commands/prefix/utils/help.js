@@ -260,6 +260,15 @@ module.exports = {
             aliases: ['calc'],
             staffOnly: false,
             details: 'Evaluates mathematical expressions using basic arithmetic operations and functions like square root and exponentiation.'
+        },
+        afk: {
+            name: 'afk',
+            description: 'Set your AFK (Away From Keyboard) status',
+            usage: `${prefix}afk [reason]`,
+            category: 'Utility',
+            aliases: [],
+            staffOnly: false,
+            details: 'Sets your AFK status with an optional reason. Notifies others when they mention you while you are AFK.'
         }
     };
 
@@ -321,7 +330,8 @@ module.exports = {
                 { name: `\`${prefix}notify\``, description: `Send a direct message notification to a user, role, or everyone.` },
                 { name: `\`${prefix}greet\``, description: 'Set a channel for welcome messages when users join the server' },
                 { name: `\`${prefix}everyone\``, description: 'Ghost ping every user in the server' },
-                {name: `\`${prefix}calculate\``, description: 'Performs mathematical calculations: +, -, *, /, %, ^, √, ² etc.' }
+                {name: `\`${prefix}calculate\``, description: 'Performs mathematical calculations: +, -, *, /, %, ^, √, ² etc.' },
+                {name: `\`${prefix}afk\``, description: 'Set your AFK (Away From Keyboard) status' }
             ],
             staffOnly: false
         },
