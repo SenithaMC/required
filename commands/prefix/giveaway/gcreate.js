@@ -119,6 +119,24 @@ module.exports = {
     const endTime = Date.now() + duration;
     const endTimestamp = Math.floor(endTime / 1000);
 
+    // Debug logging
+    console.log(`[GIVEAWAY DEBUG] Current time: ${Date.now()}`);
+    console.log(`[GIVEAWAY DEBUG] Duration: ${duration}ms`);
+    console.log(`[GIVEAWAY DEBUG] End time (ms): ${endTime}`);
+    console.log(`[GIVEAWAY DEBUG] End timestamp (seconds): ${endTimestamp}`);
+    console.log(`[GIVEAWAY DEBUG] Human readable: ${new Date(endTime).toISOString()}`);
+
+    // Validate timestamp is in the future
+    if (endTimestamp <= Math.floor(Date.now() / 1000)) {
+      return message.channel.send({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setDescription('❌ End time must be in the future. Please provide a valid duration.')
+        ]
+      });
+    }
+
     try {
       const joinButton = new ActionRowBuilder()
         .addComponents(
@@ -155,6 +173,8 @@ module.exports = {
       const giveawayId = result.insertId;
 
       this.createGiveawayCollector(giveawayMessage, giveawayId, duration);
+
+      await message.delete().catch(() => {});
 
     } catch (error) {
       console.error('Error creating giveaway:', error);
@@ -322,10 +342,13 @@ module.exports = {
       } else {
         winnerText = winnerIds.map(id => `<@${id}>`).join(', ');
       }
+
+      const endTime = new Date(giveaway.endTime).getTime();
+      const endTimestamp = Math.floor(endTime / 1000);
       
       const finalEmbed = new EmbedBuilder()
         .setTitle('GIVEAWAY ENDED')
-        .setDescription(`**Prize:** ${giveaway.prize}\n**Winner(s):** ${giveaway.winners}\n**Ended:** <t:${Math.floor(Date.now() / 1000)}:F>`)
+        .setDescription(`**Prize:** ${giveaway.prize}\n**Winner(s):** ${giveaway.winners}\n**Ended:** <t:${endTimestamp}:F>`)
         .addFields(
           { name: 'Hosted by', value: `<@${giveaway.hostId}>`, inline: true },
           { name: 'Participant(s)', value: participants.length.toString(), inline: true },
@@ -404,8 +427,17 @@ module.exports = {
 
           // Recreate the embed with correct timestamps
           const endTimestamp = Math.floor(endTime / 1000);
-          const restoredEmbed = EmbedBuilder.from(message.embeds[0])
-            .setDescription(message.embeds[0].description.replace(/<t:\d+:[RF]>/g, `<t:${endTimestamp}:R>`).replace(/<t:\d+:[RF]>/g, `<t:${endTimestamp}:F>`))
+          const oldEmbed = message.embeds[0];
+          
+          // Fix the timestamp replacement - separate for R and F formats
+          let newDescription = oldEmbed.description;
+          if (newDescription) {
+            newDescription = newDescription.replace(/<t:\d+:R>/g, `<t:${endTimestamp}:R>`);
+            newDescription = newDescription.replace(/<t:\d+:F>/g, `<t:${endTimestamp}:F>`);
+          }
+
+          const restoredEmbed = EmbedBuilder.from(oldEmbed)
+            .setDescription(newDescription)
             .setTimestamp(endTime);
 
           await message.edit({ embeds: [restoredEmbed] });
