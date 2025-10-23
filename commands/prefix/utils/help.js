@@ -4,6 +4,7 @@ const db = require('../../../utils/db');
 const gcreate = require('../giveaway/gcreate');
 const leaderboard = require('../invites/leaderboard');
 const restrict = require('../modaration/restrict');
+const calculate = require('./calculate');
 
 module.exports = {
   name: 'help',
@@ -250,6 +251,15 @@ module.exports = {
             aliases: ['silence'],
             staffOnly: true,
             details: 'Temporarily mutes a user for a specified duration, preventing them from sending messages or speaking in voice channels.'
+        },
+        calculate: {
+            name: 'calculate',
+            description: 'Performs mathematical calculations: +, -, *, /, %, ^, √, ² etc.',
+            usage: `${prefix}calculate <expression>`,
+            category: 'Utility',
+            aliases: ['calc'],
+            staffOnly: false,
+            details: 'Evaluates mathematical expressions using basic arithmetic operations and functions like square root and exponentiation.'
         }
     };
 
@@ -311,6 +321,7 @@ module.exports = {
                 { name: `\`${prefix}notify\``, description: `Send a direct message notification to a user, role, or everyone.` },
                 { name: `\`${prefix}greet\``, description: 'Set a channel for welcome messages when users join the server' },
                 { name: `\`${prefix}everyone\``, description: 'Ghost ping every user in the server' },
+                {name: `\`${prefix}calculate\``, description: 'Performs mathematical calculations: +, -, *, /, %, ^, √, ² etc.' }
             ],
             staffOnly: false
         },
