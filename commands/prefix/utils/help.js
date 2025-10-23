@@ -326,7 +326,7 @@ module.exports = {
             staffOnly: true
         },
         utility: {
-            name: '**<:wrench:1416513217634762914> Utility Commands**',
+            name: '**<:wrench:1429902609879273472> Utility Commands**',
             description: 'General utility commands',
             commands: [
                 { name: `\`${prefix}help\``, description: 'Show this help menu' },
@@ -345,7 +345,7 @@ module.exports = {
             staffOnly: false
         },
         giveaways: {
-            name: '**<:mc_tada1:1409569448553353226> Giveaways**',
+            name: '**<:tada:1429902576790409327> Giveaways**',
             description: 'Commands to manage giveaways',
             commands: [
                 { name: `\`${prefix}gcreate\``, description: 'Create a new giveaway' },
@@ -355,7 +355,7 @@ module.exports = {
             staffOnly: false
         },
         invites: {
-            name: '**<:mc_book_n_quill:1421489693807345684> Invites**',
+            name: '**<:book_n_quill:1429902883574386789> Invites**',
             description: 'Commands to manage and view invites',
             commands: [
                 { name: `\`${prefix}invites\``, description: `Check your or another user’s invite statistics.` },
