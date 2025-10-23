@@ -268,6 +268,15 @@ module.exports = {
             aliases: [],
             staffOnly: false,
             details: 'Displays a list of all members who have set their AFK status in the server, along with their reasons and timestamps.'
+        },
+        calculate: {
+            name: 'calculate',
+            description: 'Performs mathematical calculations: +, -, *, /, %, ^, √, ² etc.',
+            usage: `${prefix}calculate <expression>`,
+            category: 'Utility',
+            aliases: ['calc', 'math'],
+            staffOnly: false,
+            details: 'Evaluates mathematical expressions using basic arithmetic operations and functions like square root and exponentiation.'
         }
     };
 
@@ -330,7 +339,8 @@ module.exports = {
                 { name: `\`${prefix}greet\``, description: 'Set a channel for welcome messages when users join the server' },
                 { name: `\`${prefix}everyone\``, description: 'Ghost ping every user in the server' },
                 { name: `\`${prefix}afk\``, description: 'Set your AFK (Away From Keyboard) status' },
-                { name: `\`${prefix}afklist\``, description: 'View a list of all members currently marked as AFK in the server' }
+                { name: `\`${prefix}afklist\``, description: 'View a list of all members currently marked as AFK in the server' },
+                { name: `\`${prefix}calculate\``, description: 'Performs mathematical calculations: +, -, *, /, %, ^, √, ² etc.' }
             ],
             staffOnly: false
         },
