@@ -117,6 +117,7 @@ module.exports = {
     }
 
     const endTime = Date.now() + duration;
+    const endTimestamp = Math.floor(endTime / 1000);
 
     try {
       const joinButton = new ActionRowBuilder()
@@ -130,7 +131,7 @@ module.exports = {
 
       const embed = new EmbedBuilder()
         .setTitle('GIVEAWAY')
-        .setDescription(`**Prize:** ${prize}\n**Winner(s):** ${winners}\n**Ends:** <t:${Math.floor(endTime / 1000)}:R> (<t:${Math.floor(endTime / 1000)}:F>)`)
+        .setDescription(`**Prize:** ${prize}\n**Winner(s):** ${winners}\n**Ends:** <t:${endTimestamp}:R> (<t:${endTimestamp}:F>)`)
         .addFields(
           { name: 'Hosted by', value: message.author.toString(), inline: true },
           { name: 'Required Role', value: role.toString(), inline: true },
@@ -401,9 +402,17 @@ module.exports = {
             continue;
           }
 
+          // Recreate the embed with correct timestamps
+          const endTimestamp = Math.floor(endTime / 1000);
+          const restoredEmbed = EmbedBuilder.from(message.embeds[0])
+            .setDescription(message.embeds[0].description.replace(/<t:\d+:[RF]>/g, `<t:${endTimestamp}:R>`).replace(/<t:\d+:[RF]>/g, `<t:${endTimestamp}:F>`))
+            .setTimestamp(endTime);
+
+          await message.edit({ embeds: [restoredEmbed] });
+
           this.createGiveawayCollector(message, giveaway.id, remainingTime);
           restoredCount++;
-          console.log(`✅ Restored giveaway ${giveaway.id} with ${remainingTime}ms remaining`);
+          console.log(`✅ Restored giveaway ${giveaway.id} with ${Math.floor(remainingTime / 1000)}s remaining`);
           
         } catch (error) {
           console.error(`❌ Failed to restore giveaway ${giveaway.id}:`, error);
