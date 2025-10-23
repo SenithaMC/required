@@ -29,11 +29,6 @@ module.exports = {
                 targetUsers = Array.from(mentionedUsers.values());
             }
 
-            const embed = new EmbedBuilder()
-                .setTitle('📊 Message Count')
-                .setColor(0x00FF00)
-                .setTimestamp();
-
             for (const user of targetUsers) {
                 try {
                     const [rows] = await db.pool.execute(
@@ -43,26 +38,28 @@ module.exports = {
 
                     const count = rows.length > 0 ? rows[0].message_count : 0;
                     
-                    embed.addFields({
-                        name: `${user.tag}`,
-                        value: `**Messages:** ${count.toLocaleString()}`,
-                        inline: true
-                    });
+                    const member = await message.guild.members.fetch(user.id);
+                    const displayName = member?.displayName || user.username;
+
+                    const embed = new EmbedBuilder()
+                        .setTitle(displayName)
+                        .setDescription(`You sent a total of ${count.toLocaleString()} messages in this server.`)
+                        .setColor(0x00FF00)
+                        .setTimestamp();
+
+                    await message.channel.send({ embeds: [embed] });
+
                 } catch (error) {
                     console.error(`Error fetching message count for user ${user.id}:`, error);
-                    embed.addFields({
-                        name: `${user.tag}`,
-                        value: `**Messages:** Error loading count`,
-                        inline: true
-                    });
+                    
+                    const errorEmbed = new EmbedBuilder()
+                        .setColor(0xFF0000)
+                        .setDescription(`❌ Failed to fetch message count for ${user.tag}`)
+                        .setTimestamp();
+                    
+                    await message.channel.send({ embeds: [errorEmbed] });
                 }
             }
-
-            if (targetUsers.length === 1 && targetUsers[0].id === message.author.id) {
-                embed.setDescription(`Here's your message count in **${message.guild.name}**`);
-            }
-
-            await message.channel.send({ embeds: [embed] });
 
         } catch (error) {
             console.error('Error in messages command:', error);
