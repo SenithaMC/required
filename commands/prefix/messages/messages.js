@@ -5,7 +5,7 @@ module.exports = {
     name: 'messages',
     description: 'Show message count for users',
     usage: 'messages [@user]',
-    aliases: ['msgcount', 'messagecount'],
+    aliases: ['msgcount', 'messagecount', 'msg'],
     
     async execute(message, args) {
         try {
