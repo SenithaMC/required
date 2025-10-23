@@ -307,7 +307,7 @@ module.exports = {
 
     const commandCategories = {
         moderation: {
-            name: '**<:shield:1416513072121516163> Moderation Commands**',
+            name: '**<a:thunder:1430965977436127375> Moderation Commands**',
             description: 'Commands for server moderation (Staff only)',
             commands: [
                 { name: `\`${prefix}kick\``, description: 'Kick a user from the server' },
