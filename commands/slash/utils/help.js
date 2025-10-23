@@ -6,7 +6,7 @@ const commandList = [
   'kick', 'ban', 'tempban', 'lock', 'unlock', 'ping', 'help',
   'gcreate', 'greroll', 'gend', 'invites', 'inviter', 'invitecodes',
   'leaderboard', 'massban', 'masskick', 'warn', ' purge', 'nuke',
-  'creset', 'cases', 'greet', 'restrict'
+  'creset', 'cases', 'greet', 'restrict', 'calculate', 'afk'
 ];
 
 module.exports = {
@@ -236,6 +236,24 @@ module.exports = {
           aliases: [],
           staffOnly: true,
           details: 'Restrict all bot commands to administrators only, with optional role/channel exemptions.'
+      },
+      calculate: {
+          name: 'calculate',
+          description: 'Performs mathematical calculations: +, -, *, /, %, ^, √, ² etc.',
+          usage: `${prefix}calculate <expression>`,
+          category: 'Utility',
+          aliases: ['calc'],
+          staffOnly: false,
+          details: 'Evaluates mathematical expressions using basic arithmetic operations and functions like square root and exponentiation.'
+      },
+      afk: {
+          name: 'afk',
+          description: 'Set your AFK (Away From Keyboard) status',
+          usage: `${prefix}afk [reason]`,
+          category: 'Utility',
+          aliases: [],
+          staffOnly: false,
+          details: 'Sets your AFK status with an optional reason. Notifies others when they mention you while you are AFK.'
       }
     };
 
@@ -301,7 +319,9 @@ module.exports = {
                 { name: `\`${prefix}leaderboard\``, description: `View the server’s invite leaderboard.` },
                 { name: `\`${prefix}purge\``, description: `Delete a specified number of recent messages in a channel.` },
                 { name: `\`${prefix}nuke\``, description: `Completely clears a channel by cloning and deleting it.` },
-                { name: `\`${prefix}greet\``, description: `Set a channel for automatic welcome messages when users join the server` }
+                { name: `\`${prefix}greet\``, description: `Set a channel for automatic welcome messages when users join the server` },
+                {name: `\`${prefix}calculate\``, description: 'Performs mathematical calculations: +, -, *, /, %, ^, √, ² etc.' },
+                {name: `\`${prefix}afk\``, description: 'Set your AFK (Away From Keyboard) status' }
             ],
             staffOnly: false
         }
