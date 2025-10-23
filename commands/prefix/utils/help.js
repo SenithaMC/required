@@ -4,7 +4,6 @@ const db = require('../../../utils/db');
 const gcreate = require('../giveaway/gcreate');
 const leaderboard = require('../invites/leaderboard');
 const restrict = require('../modaration/restrict');
-const calculate = require('./calculate');
 
 module.exports = {
   name: 'help',
