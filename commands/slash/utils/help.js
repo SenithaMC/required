@@ -6,7 +6,7 @@ const commandList = [
   'kick', 'ban', 'tempban', 'lock', 'unlock', 'ping', 'help',
   'gcreate', 'greroll', 'gend', 'invites', 'inviter', 'invitecodes',
   'leaderboard', 'massban', 'masskick', 'warn', ' purge', 'nuke',
-  'creset', 'cases', 'greet', 'restrict', 'afk'
+  'creset', 'cases', 'greet', 'restrict', 'afk', 'afklist'
 ];
 
 module.exports = {
@@ -245,6 +245,15 @@ module.exports = {
           aliases: [],
           staffOnly: false,
           details: 'Sets your AFK status with an optional reason. Notifies others when they mention you while you are AFK.'
+      },
+      afklist: {
+          name: 'afklist',
+          description: 'View a list of all members currently marked as AFK in the server',
+          usage: `${prefix}afklist`,
+          category: 'Utility',
+          aliases: [],
+          staffOnly: false,
+          details: 'Displays a list of all members who have set their AFK status in the server, along with their reasons and timestamps.'
       }
     };
 
@@ -311,7 +320,8 @@ module.exports = {
                 { name: `\`${prefix}purge\``, description: `Delete a specified number of recent messages in a channel.` },
                 { name: `\`${prefix}nuke\``, description: `Completely clears a channel by cloning and deleting it.` },
                 { name: `\`${prefix}greet\``, description: `Set a channel for automatic welcome messages when users join the server` },
-                { name: `\`${prefix}afk\``, description: 'Set your AFK (Away From Keyboard) status' }
+                { name: `\`${prefix}afk\``, description: 'Set your AFK (Away From Keyboard) status' },
+                { name: `\`${prefix}afklist\``, description: 'View a list of all members currently marked as AFK in the server' }
             ],
             staffOnly: false
         }
