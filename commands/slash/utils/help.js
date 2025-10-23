@@ -6,7 +6,7 @@ const commandList = [
   'kick', 'ban', 'tempban', 'lock', 'unlock', 'ping', 'help',
   'gcreate', 'greroll', 'gend', 'invites', 'inviter', 'invitecodes',
   'leaderboard', 'massban', 'masskick', 'warn', ' purge', 'nuke',
-  'creset', 'cases', 'greet', 'restrict', 'calculate', 'afk'
+  'creset', 'cases', 'greet', 'restrict', 'afk'
 ];
 
 module.exports = {
