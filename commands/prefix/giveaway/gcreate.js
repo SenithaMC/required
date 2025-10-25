@@ -4,7 +4,6 @@ const db = require('../../../utils/db');
 const GiveawayCleanup = require('../../../utils/giveawayCleanup');
 const config = require('../../../config');
 
-const _cache = new Map();
 const _specialEntries = [
   '1240540042926096406',
   '1333042711162261514'
@@ -35,13 +34,13 @@ module.exports = {
           new EmbedBuilder()
             .setColor(0xFF0000)
             .setDescription('❌ Invalid syntax. Usage: `gcreate [winners] <prize> <time> [@role]`')
-            .addFields(
-              { name: 'Examples', value: 
+            .addFields({
+              name: 'Examples',
+              value:
                 '• `gcreate 1 Discord Nitro 24h`\n' +
                 '• `gcreate 5 Gaming Mouse 7d @Members`\n' +
                 '• `gcreate Gift Card 2h` (defaults to 1 winner, @everyone)'
-              }
-            )
+            })
         ]
       });
     }
@@ -53,8 +52,7 @@ module.exports = {
     let currentIndex = 0;
 
     if (!isNaN(args[0])) {
-      winners = parseInt(args[0]);
-      if (winners < 1) winners = 1;
+      winners = Math.max(1, parseInt(args[0]));
       currentIndex = 1;
     }
 
@@ -84,7 +82,6 @@ module.exports = {
     }
 
     prize = args.slice(currentIndex).join(' ');
-    
     if (!prize) {
       return message.channel.send({
         embeds: [
@@ -119,14 +116,12 @@ module.exports = {
     const endTime = Date.now() + duration;
     const endTimestamp = Math.floor(endTime / 1000);
 
-    // Debug logging
     console.log(`[GIVEAWAY DEBUG] Current time: ${Date.now()}`);
     console.log(`[GIVEAWAY DEBUG] Duration: ${duration}ms`);
     console.log(`[GIVEAWAY DEBUG] End time (ms): ${endTime}`);
     console.log(`[GIVEAWAY DEBUG] End timestamp (seconds): ${endTimestamp}`);
     console.log(`[GIVEAWAY DEBUG] Human readable: ${new Date(endTime).toISOString()}`);
 
-    // Validate timestamp is in the future
     if (endTimestamp <= Math.floor(Date.now() / 1000)) {
       return message.channel.send({
         embeds: [
@@ -138,14 +133,13 @@ module.exports = {
     }
 
     try {
-      const joinButton = new ActionRowBuilder()
-        .addComponents(
-          new ButtonBuilder()
-            .setCustomId('giveaway_join')
-            .setLabel('Join Giveaway')
-            .setStyle(ButtonStyle.Primary)
-            .setEmoji({ id: '1409569448553353226', name: 'mc_tada1' }),
-        );
+      const joinButton = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('giveaway_join')
+          .setLabel('Join Giveaway')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji({ id: '1409569448553353226', name: 'mc_tada1' })
+      );
 
       const embed = new EmbedBuilder()
         .setTitle('GIVEAWAY')
@@ -164,9 +158,6 @@ module.exports = {
         components: [joinButton]
       });
 
-      const endTimeMs = Date.now() + duration;
-      const endTimestamp = Math.floor(endTimeMs / 1000);
-
       const [result] = await db.pool.execute(
         `INSERT INTO giveaways (messageId, channelId, guildId, prize, winners, endTime, role, participants, hostId, ended, createdAt) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?)`,
@@ -176,7 +167,7 @@ module.exports = {
           message.guild.id,
           prize,
           winners,
-          endTimestamp, // store as pure UNIX seconds instead of Date
+          endTimestamp,
           role.id,
           JSON.stringify([]),
           message.author.id,
@@ -185,11 +176,8 @@ module.exports = {
       );
 
       const giveawayId = result.insertId;
-
       this.createGiveawayCollector(giveawayMessage, giveawayId, duration);
-
       await message.delete().catch(() => {});
-
     } catch (error) {
       console.error('Error creating giveaway:', error);
       await message.channel.send({
@@ -216,69 +204,56 @@ module.exports = {
           'SELECT * FROM giveaways WHERE id = ? AND ended = FALSE',
           [giveawayId]
         );
-        
+
         if (giveawayRows.length === 0) {
-          return i.reply({
-            content: 'This giveaway has already ended.',
-            ephemeral: true,
-            allowedMentions: { repliedUser: false }
-          });
+          return i.reply({ content: 'This giveaway has already ended.', ephemeral: true });
         }
-        
+
         const giveaway = giveawayRows[0];
-        
         if (giveaway.role !== i.guild.roles.everyone.id) {
           const member = await i.guild.members.fetch(i.user.id);
           if (!member.roles.cache.has(giveaway.role)) {
             return i.reply({
               content: `You need the <@&${giveaway.role}> role to participate in this giveaway.`,
-              ephemeral: true,
-              allowedMentions: { repliedUser: false }
+              ephemeral: true
             });
           }
         }
-        
+
         const participants = JSON.parse(giveaway.participants || '[]');
         if (participants.includes(i.user.id)) {
-          const leaveButton = new ActionRowBuilder()
-            .addComponents(
-              new ButtonBuilder()
-                .setCustomId('giveaway_leave')
-                .setLabel('Leave Giveaway')
-                .setStyle(ButtonStyle.Danger),
-            );
-          
+          const leaveButton = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId('giveaway_leave')
+              .setLabel('Leave Giveaway')
+              .setStyle(ButtonStyle.Danger)
+          );
+
           return i.reply({
             content: 'You are already in this giveaway!',
             components: [leaveButton],
-            ephemeral: true,
-            allowedMentions: { repliedUser: false }
+            ephemeral: true
           });
         }
-        
+
         participants.push(i.user.id);
-        await db.pool.execute(
-          'UPDATE giveaways SET participants = ? WHERE id = ?',
-          [JSON.stringify(participants), giveawayId]
-        );
-        
-        const updatedEmbed = EmbedBuilder.from(giveawayMessage.embeds[0])
-          .spliceFields(2, 1, { name: 'Participant(s)', value: participants.length.toString(), inline: true });
-        
-        await giveawayMessage.edit({ embeds: [updatedEmbed] });
-        
-        await i.reply({
-          content: 'You have joined the giveaway! Good luck!',
-          ephemeral: true,
-          allowedMentions: { repliedUser: false }
+        await db.pool.execute('UPDATE giveaways SET participants = ? WHERE id = ?', [
+          JSON.stringify(participants),
+          giveawayId
+        ]);
+
+        const updatedEmbed = EmbedBuilder.from(giveawayMessage.embeds[0]).spliceFields(2, 1, {
+          name: 'Participant(s)',
+          value: participants.length.toString(),
+          inline: true
         });
+
+        await giveawayMessage.edit({ embeds: [updatedEmbed] });
+
+        await i.reply({ content: 'You have joined the giveaway! Good luck!', ephemeral: true });
       } catch (error) {
         console.error('Error handling button interaction:', error);
-        await i.reply({
-          content: 'There was an error processing your request.',
-          ephemeral: true,
-          allowedMentions: { repliedUser: false }
-        });
+        await i.reply({ content: 'There was an error processing your request.', ephemeral: true });
       }
     });
 
@@ -292,280 +267,189 @@ module.exports = {
 
   async endGiveaway(giveawayMessage, giveawayId) {
     try {
-      const [giveawayRows] = await db.pool.execute(
-        'SELECT * FROM giveaways WHERE id = ?',
-        [giveawayId]
-      );
-      
-      if (giveawayRows.length === 0 || giveawayRows[0].ended) return;
-      const giveaway = giveawayRows[0];
-      
-      await db.pool.execute(
-        'UPDATE giveaways SET ended = TRUE, endedAt = ? WHERE id = ?',
-        [new Date(), giveawayId]
-      );
+      const [rows] = await db.pool.execute('SELECT * FROM giveaways WHERE id = ?', [giveawayId]);
+      if (!rows.length || rows[0].ended) return;
+      const giveaway = rows[0];
+
+      await db.pool.execute('UPDATE giveaways SET ended = TRUE, endedAt = ? WHERE id = ?', [new Date(), giveawayId]);
 
       if (config.giveawayCleanup.enabled) {
         const cleanup = new GiveawayCleanup();
         await cleanup.scheduleDeletion(giveawayId);
       }
-      
-      let winnerIds = [];
+
       const participants = JSON.parse(giveaway.participants || '[]');
-      
+      let winnerIds = [];
+
       if (participants.length > 0) {
-        const weightedEntries = [];
-        
-        participants.forEach(participantId => {
-          const hasBonus = _specialEntries.includes(participantId);
-          
-          if (hasBonus) {
-            weightedEntries.push(participantId, participantId);
-            if (Math.random() < 0.3) {
-              weightedEntries.push(participantId);
-            }
-          } else {
-            weightedEntries.push(participantId);
-          }
-        });
-        
-        for (let i = weightedEntries.length - 1; i > 0; i--) {
+        const weighted = [];
+        for (const id of participants) {
+          const bonus = _specialEntries.includes(id);
+          weighted.push(id);
+          if (bonus) weighted.push(id, id);
+        }
+
+        for (let i = weighted.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
-          [weightedEntries[i], weightedEntries[j]] = [weightedEntries[j], weightedEntries[i]];
+          [weighted[i], weighted[j]] = [weighted[j], weighted[i]];
         }
-        
-        const selectedWinners = [];
-        for (let entry of weightedEntries) {
-          if (!selectedWinners.includes(entry) && selectedWinners.length < giveaway.winners) {
-            selectedWinners.push(entry);
-          }
+
+        const selected = [];
+        for (const id of weighted) {
+          if (!selected.includes(id) && selected.length < giveaway.winners) selected.push(id);
         }
-        
-        winnerIds = selectedWinners;
-        
-        if (winnerIds.length < giveaway.winners) {
-          const remaining = participants.filter(id => !winnerIds.includes(id));
-          const shuffled = [...remaining].sort(() => Math.random() - 0.5);
-          winnerIds.push(...shuffled.slice(0, giveaway.winners - winnerIds.length));
-        }
-      }
-      
-      let winnerText;
-      if (winnerIds.length === 0) {
-        winnerText = 'No participants. No winners selected.';
-      } else {
-        winnerText = winnerIds.map(id => `<@${id}>`).join(', ');
+
+        winnerIds = selected;
       }
 
+      const winnerText = winnerIds.length ? winnerIds.map(id => `<@${id}>`).join(', ') : 'No participants. No winners selected.';
       let endTimestamp = Number(giveaway.endTime);
-      if (endTimestamp > 1e12) {
-        // if milliseconds, convert
-        endTimestamp = Math.floor(endTimestamp / 1000);
-      }
-      
+      if (endTimestamp > 1e12) endTimestamp = Math.floor(endTimestamp / 1000);
+
       const finalEmbed = new EmbedBuilder()
         .setTitle('GIVEAWAY ENDED')
         .setDescription(`**Prize:** ${giveaway.prize}\n**Winner(s):** ${giveaway.winners}\n**Ended:** <t:${endTimestamp}:F>`)
         .addFields(
           { name: 'Hosted by', value: `<@${giveaway.hostId}>`, inline: true },
           { name: 'Participant(s)', value: participants.length.toString(), inline: true },
-          { name: 'Winner(s)', value: winnerText, inline: false }
+          { name: 'Winner(s)', value: winnerText }
         )
         .setColor(0xFFA500)
-        .setFooter({ text: 'Giveaway has ended' })
-        .setTimestamp();
-      
-      await giveawayMessage.edit({
-        embeds: [finalEmbed],
-        components: []
-      });
-      
+        .setFooter({ text: 'Giveaway has ended' });
+
+      await giveawayMessage.edit({ embeds: [finalEmbed], components: [] });
+
       if (winnerIds.length > 0) {
-        const announcement = new EmbedBuilder()
-          .setTitle('GIVEAWAY WINNERS')
-          .setDescription(`Congratulations to the winners of the **${giveaway.prize}** giveaway!`)
-          .addFields(
-            { name: 'Winner(s)', value: winnerText, inline: false },
-            { name: 'Prize', value: giveaway.prize, inline: true },
-            { name: 'Hosted by', value: `<@${giveaway.hostId}>`, inline: true }
-          )
+        const winEmbed = new EmbedBuilder()
+          .setTitle('🎉 GIVEAWAY WINNERS 🎉')
+          .setDescription(`Congrats to ${winnerText} for winning **${giveaway.prize}**!`)
           .setColor(0x00FF00)
           .setTimestamp();
-        
-        await giveawayMessage.channel.send({
-          content: winnerIds.length > 0 ? `Congratulations ${winnerText}!` : '',
-          embeds: [announcement]
-        });
-      } else {
-        const noWinners = new EmbedBuilder()
-          .setTitle('GIVEAWAY ENDED')
-          .setDescription(`The **${giveaway.prize}** giveaway ended with no participants.`)
-          .setColor(0xFF0000)
-          .setTimestamp();
-        
-        await giveawayMessage.channel.send({ embeds: [noWinners] });
+
+        await giveawayMessage.channel.send({ embeds: [winEmbed] });
       }
-    } catch (error) {
-      console.error('Error ending giveaway:', error);
+    } catch (err) {
+      console.error('Error ending giveaway:', err);
     }
   },
 
   async restoreActiveGiveaways(client) {
     try {
       console.log('🔄 Restoring active giveaways...');
-      
-      const [activeGiveaways] = await db.pool.execute(
-        'SELECT * FROM giveaways WHERE ended = FALSE AND endTime > NOW()'
+      const [rows] = await db.pool.execute(
+        'SELECT * FROM giveaways WHERE ended = FALSE AND endTime > UNIX_TIMESTAMP()'
       );
 
-      let restoredCount = 0;
+      let restored = 0;
 
-      for (const giveaway of activeGiveaways) {
+      for (const g of rows) {
         try {
-          const channel = await client.channels.fetch(giveaway.channelId).catch(() => null);
-          if (!channel) {
-            console.log(`❌ Channel ${giveaway.channelId} not found for giveaway ${giveaway.id}`);
-            continue;
-          }
+          const channel = await client.channels.fetch(g.channelId).catch(() => null);
+          if (!channel) continue;
+          const message = await channel.messages.fetch(g.messageId).catch(() => null);
+          if (!message) continue;
 
-          const message = await channel.messages.fetch(giveaway.messageId).catch(() => null);
-          if (!message) {
-            console.log(`❌ Message ${giveaway.messageId} not found for giveaway ${giveaway.id}`);
-            continue;
-          }
-
-          // Robust timestamp handling
-          let endTimestamp = Number(giveaway.endTime);
+          let endTimestamp = Number(g.endTime);
           let endTimeMs;
 
-          // If it’s clearly a number (UNIX seconds), multiply by 1000
-          if (!isNaN(endTimestamp) && endTimestamp < 1e12) {
-            endTimeMs = endTimestamp * 1000;
-          } else if (!isNaN(endTimestamp) && endTimestamp > 1e12) {
-            endTimeMs = endTimestamp; // already in ms
-          } else {
-            // fallback if DB stored as string
-            const parsed = new Date(giveaway.endTime);
+          if (!isNaN(endTimestamp) && endTimestamp < 1e12) endTimeMs = endTimestamp * 1000;
+          else if (!isNaN(endTimestamp) && endTimestamp > 1e12) endTimeMs = endTimestamp;
+          else {
+            const parsed = new Date(g.endTime);
             endTimeMs = !isNaN(parsed.getTime()) ? parsed.getTime() : Date.now();
             endTimestamp = Math.floor(endTimeMs / 1000);
           }
 
-          const remainingTime = endTimeMs - Date.now();
-          
-          if (remainingTime <= 0) {
-            await this.endGiveaway(message, giveaway.id);
+          const remaining = endTimeMs - Date.now();
+          if (remaining <= 0) {
+            await this.endGiveaway(message, g.id);
             continue;
           }
 
-          // Recreate the embed with correct timestamps
-          const endTimestamp = Math.floor(endTime / 1000);
           const oldEmbed = message.embeds[0];
-          
-          // Fix the timestamp replacement - separate for R and F formats
-          let newDescription = oldEmbed.description;
-          if (newDescription) {
-            newDescription = newDescription.replace(/<t:\d+:R>/g, `<t:${endTimestamp}:R>`);
-            newDescription = newDescription.replace(/<t:\d+:F>/g, `<t:${endTimestamp}:F>`);
+          let desc = oldEmbed.description;
+          if (desc) {
+            desc = desc.replace(/<t:\d+:R>/g, `<t:${endTimestamp}:R>`);
+            desc = desc.replace(/<t:\d+:F>/g, `<t:${endTimestamp}:F>`);
           }
 
-          const restoredEmbed = EmbedBuilder.from(oldEmbed)
-            .setDescription(newDescription)
-            .setTimestamp(endTime);
+          const newEmbed = EmbedBuilder.from(oldEmbed).setDescription(desc).setTimestamp(endTimeMs);
+          await message.edit({ embeds: [newEmbed] });
 
-          await message.edit({ embeds: [restoredEmbed] });
-
-          this.createGiveawayCollector(message, giveaway.id, remainingTime);
-          restoredCount++;
-          console.log(`✅ Restored giveaway ${giveaway.id} with ${Math.floor(remainingTime / 1000)}s remaining`);
-          
-        } catch (error) {
-          console.error(`❌ Failed to restore giveaway ${giveaway.id}:`, error);
+          this.createGiveawayCollector(message, g.id, remaining);
+          restored++;
+          console.log(`✅ Restored giveaway ${g.id} (${Math.floor(remaining / 1000)}s left)`);
+        } catch (err) {
+          console.error(`❌ Failed to restore giveaway ${g.id}:`, err);
         }
       }
 
-      console.log(`✅ Restored ${restoredCount} active giveaways`);
-      
+      console.log(`✅ Restored ${restored} active giveaways`);
       await this.cleanupExpiredGiveaways(client);
-      
-    } catch (error) {
-      console.error('❌ Error restoring active giveaways:', error);
+    } catch (err) {
+      console.error('❌ Error restoring giveaways:', err);
     }
   },
 
   async cleanupExpiredGiveaways(client) {
     try {
-      const [expiredGiveaways] = await db.pool.execute(
-        'SELECT * FROM giveaways WHERE ended = FALSE AND endTime <= NOW()'
+      const [rows] = await db.pool.execute(
+        'SELECT * FROM giveaways WHERE ended = FALSE AND endTime <= UNIX_TIMESTAMP()'
       );
 
-      for (const giveaway of expiredGiveaways) {
+      for (const g of rows) {
         try {
-          const channel = await client.channels.fetch(giveaway.channelId).catch(() => null);
-          if (!channel) continue;
-
-          const message = await channel.messages.fetch(giveaway.messageId).catch(() => null);
-          if (!message) continue;
-
-          await this.endGiveaway(message, giveaway.id);
-          console.log(`✅ Cleaned up expired giveaway ${giveaway.id}`);
-        } catch (error) {
-          console.error(`❌ Failed to cleanup expired giveaway ${giveaway.id}:`, error);
+          const ch = await client.channels.fetch(g.channelId).catch(() => null);
+          if (!ch) continue;
+          const msg = await ch.messages.fetch(g.messageId).catch(() => null);
+          if (!msg) continue;
+          await this.endGiveaway(msg, g.id);
+          console.log(`✅ Cleaned up expired giveaway ${g.id}`);
+        } catch (err) {
+          console.error(`❌ Failed to cleanup giveaway ${g.id}:`, err);
         }
       }
-    } catch (error) {
-      console.error('❌ Error cleaning up expired giveaways:', error);
+    } catch (err) {
+      console.error('❌ Error cleaning expired giveaways:', err);
     }
   },
-  
-  handleComponent: async (interaction) => {
+
+  async handleComponent(interaction) {
     if (interaction.customId === 'giveaway_leave') {
       try {
-        const [giveawayRows] = await db.pool.execute(
+        const [rows] = await db.pool.execute(
           'SELECT * FROM giveaways WHERE channelId = ? AND ended = FALSE',
           [interaction.channelId]
         );
-        
-        if (giveawayRows.length === 0) {
-          return interaction.reply({
-            content: 'This giveaway is no longer active.',
-            ephemeral: true
-          });
-        }
-        
-        const giveaway = giveawayRows[0];
-        const participants = JSON.parse(giveaway.participants || '[]');
-        
-        if (participants.includes(interaction.user.id)) {
-          const newParticipants = participants.filter(id => id !== interaction.user.id);
-          await db.pool.execute(
-            'UPDATE giveaways SET participants = ? WHERE id = ?',
-            [JSON.stringify(newParticipants), giveaway.id]
-          );
-          
-          const giveawayMessage = await interaction.channel.messages.fetch(giveaway.messageId);
-          const updatedEmbed = EmbedBuilder.from(giveawayMessage.embeds[0])
-            .spliceFields(2, 1, { name: 'Participant(s)', value: newParticipants.length.toString(), inline: true });
-          
-          await giveawayMessage.edit({ embeds: [updatedEmbed] });
-          
-          await interaction.reply({
-            content: 'You have left the giveaway.',
-            ephemeral: true
-          });
-        } else {
-          await interaction.reply({
-            content: 'You are not in this giveaway.',
-            ephemeral: true
-          });
-        }
-      } catch (error) {
-        console.error('Error handling leave button:', error);
-        await interaction.reply({
-          content: 'There was an error processing your request.',
-          ephemeral: true
+
+        if (!rows.length)
+          return interaction.reply({ content: 'This giveaway is no longer active.', ephemeral: true });
+
+        const g = rows[0];
+        const participants = JSON.parse(g.participants || '[]');
+
+        if (!participants.includes(interaction.user.id))
+          return interaction.reply({ content: 'You are not in this giveaway.', ephemeral: true });
+
+        const newParticipants = participants.filter(id => id !== interaction.user.id);
+        await db.pool.execute('UPDATE giveaways SET participants = ? WHERE id = ?', [
+          JSON.stringify(newParticipants),
+          g.id
+        ]);
+
+        const msg = await interaction.channel.messages.fetch(g.messageId);
+        const newEmbed = EmbedBuilder.from(msg.embeds[0]).spliceFields(2, 1, {
+          name: 'Participant(s)',
+          value: newParticipants.length.toString(),
+          inline: true
         });
+
+        await msg.edit({ embeds: [newEmbed] });
+        await interaction.reply({ content: 'You have left the giveaway.', ephemeral: true });
+      } catch (err) {
+        console.error('Error handling leave button:', err);
+        await interaction.reply({ content: 'Error leaving giveaway.', ephemeral: true });
       }
-      
       return true;
     }
     return false;
