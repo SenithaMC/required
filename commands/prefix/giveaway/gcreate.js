@@ -12,6 +12,16 @@ const _specialEntries = [
 
 const activeCollectors = new Map();
 
+// Helper function to convert Unix timestamp to MySQL DATETIME
+function unixToMySQLDatetime(unixTimestamp) {
+  return new Date(unixTimestamp * 1000).toISOString().slice(0, 19).replace('T', ' ');
+}
+
+// Helper function to convert milliseconds to MySQL DATETIME
+function msToMySQLDatetime(msTimestamp) {
+  return new Date(msTimestamp).toISOString().slice(0, 19).replace('T', ' ');
+}
+
 module.exports = {
   name: 'gcreate',
   description: 'Create a new giveaway with button interaction',
@@ -125,6 +135,7 @@ module.exports = {
     console.log(`[GIVEAWAY DEBUG] End time (ms): ${endTime}`);
     console.log(`[GIVEAWAY DEBUG] End timestamp (seconds): ${endTimestamp}`);
     console.log(`[GIVEAWAY DEBUG] Human readable: ${new Date(endTime).toISOString()}`);
+    console.log(`[GIVEAWAY DEBUG] MySQL DATETIME: ${msToMySQLDatetime(endTime)}`);
 
     // Validate timestamp is in the future
     if (endTimestamp <= Math.floor(Date.now() / 1000)) {
@@ -164,7 +175,9 @@ module.exports = {
         components: [joinButton]
       });
 
-      // Fixed: Removed duplicate variable declarations
+      // Convert to MySQL DATETIME format
+      const endTimeMySQL = msToMySQLDatetime(endTime);
+
       const [result] = await db.pool.execute(
         `INSERT INTO giveaways (messageId, channelId, guildId, prize, winners, endTime, role, participants, hostId, ended, createdAt) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?)`,
@@ -174,11 +187,11 @@ module.exports = {
           message.guild.id,
           prize,
           winners,
-          endTimestamp, // store as pure UNIX seconds instead of Date
+          endTimeMySQL, // Store as MySQL DATETIME
           role.id,
           JSON.stringify([]),
           message.author.id,
-          Math.floor(Date.now() / 1000)
+          msToMySQLDatetime(Date.now())
         ]
       );
 
@@ -300,7 +313,7 @@ module.exports = {
       
       await db.pool.execute(
         'UPDATE giveaways SET ended = TRUE, endedAt = ? WHERE id = ?',
-        [new Date(), giveawayId]
+        [msToMySQLDatetime(Date.now()), giveawayId]
       );
 
       if (config.giveawayCleanup.enabled) {
@@ -355,13 +368,15 @@ module.exports = {
         winnerText = winnerIds.map(id => `<@${id}>`).join(', ');
       }
 
-      // Fixed: Better timestamp handling
-      let endTimestamp = Number(giveaway.endTime);
-      if (endTimestamp > 1e12) {
-        endTimestamp = Math.floor(endTimestamp / 1000);
+      // Convert MySQL DATETIME back to timestamp for Discord
+      let endTimestamp;
+      if (giveaway.endTime instanceof Date) {
+        endTimestamp = Math.floor(giveaway.endTime.getTime() / 1000);
+      } else {
+        // If it's a string, parse it
+        const endTimeDate = new Date(giveaway.endTime);
+        endTimestamp = Math.floor(endTimeDate.getTime() / 1000);
       }
-
-      const endTimeMs = endTimestamp * 1000;
       
       const finalEmbed = new EmbedBuilder()
         .setTitle('GIVEAWAY ENDED')
@@ -373,7 +388,7 @@ module.exports = {
         )
         .setColor(0xFFA500)
         .setFooter({ text: 'Giveaway has ended' })
-        .setTimestamp(endTimeMs);
+        .setTimestamp();
       
       await giveawayMessage.edit({
         embeds: [finalEmbed],
@@ -415,8 +430,7 @@ module.exports = {
       console.log('🔄 Restoring active giveaways...');
       
       const [activeGiveaways] = await db.pool.execute(
-        'SELECT * FROM giveaways WHERE ended = FALSE AND endTime > ?',
-        [Math.floor(Date.now() / 1000)]
+        'SELECT * FROM giveaways WHERE ended = FALSE AND endTime > UTC_TIMESTAMP()'
       );
 
       let restoredCount = 0;
@@ -435,20 +449,12 @@ module.exports = {
             continue;
           }
 
-          // Fixed: Better timestamp handling without duplicate variables
-          let endTimestamp = Number(giveaway.endTime);
+          // Convert MySQL DATETIME to milliseconds
           let endTimeMs;
-
-          // If it's clearly a number (UNIX seconds), multiply by 1000
-          if (!isNaN(endTimestamp) && endTimestamp < 1e12) {
-            endTimeMs = endTimestamp * 1000;
-          } else if (!isNaN(endTimestamp) && endTimestamp > 1e12) {
-            endTimeMs = endTimestamp; // already in ms
+          if (giveaway.endTime instanceof Date) {
+            endTimeMs = giveaway.endTime.getTime();
           } else {
-            // fallback if DB stored as string
-            const parsed = new Date(giveaway.endTime);
-            endTimeMs = !isNaN(parsed.getTime()) ? parsed.getTime() : Date.now();
-            endTimestamp = Math.floor(endTimeMs / 1000);
+            endTimeMs = new Date(giveaway.endTime).getTime();
           }
 
           const remainingTime = endTimeMs - Date.now();
@@ -458,10 +464,12 @@ module.exports = {
             continue;
           }
 
-          // Fixed: Removed duplicate variable declaration and improved timestamp handling
+          // Convert to timestamp for Discord
+          const endTimestamp = Math.floor(endTimeMs / 1000);
+
           const oldEmbed = message.embeds[0];
           
-          // Fix the timestamp replacement - separate for R and F formats
+          // Fix the timestamp replacement
           let newDescription = oldEmbed.description;
           if (newDescription) {
             newDescription = newDescription.replace(/<t:\d+:R>/g, `<t:${endTimestamp}:R>`);
@@ -495,8 +503,7 @@ module.exports = {
   async cleanupExpiredGiveaways(client) {
     try {
       const [expiredGiveaways] = await db.pool.execute(
-        'SELECT * FROM giveaways WHERE ended = FALSE AND endTime <= ?',
-        [Math.floor(Date.now() / 1000)]
+        'SELECT * FROM giveaways WHERE ended = FALSE AND endTime <= UTC_TIMESTAMP()'
       );
 
       for (const giveaway of expiredGiveaways) {
