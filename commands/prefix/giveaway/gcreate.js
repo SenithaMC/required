@@ -164,10 +164,24 @@ module.exports = {
         components: [joinButton]
       });
 
+      const endTimeMs = Date.now() + duration;
+      const endTimestamp = Math.floor(endTimeMs / 1000);
+
       const [result] = await db.pool.execute(
         `INSERT INTO giveaways (messageId, channelId, guildId, prize, winners, endTime, role, participants, hostId, ended, createdAt) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?)`,
-        [giveawayMessage.id, message.channel.id, message.guild.id, prize, winners, new Date(endTime), role.id, JSON.stringify([]), message.author.id, new Date()]
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?)`,
+        [
+          giveawayMessage.id,
+          message.channel.id,
+          message.guild.id,
+          prize,
+          winners,
+          endTimestamp, // store as pure UNIX seconds instead of Date
+          role.id,
+          JSON.stringify([]),
+          message.author.id,
+          Math.floor(Date.now() / 1000)
+        ]
       );
 
       const giveawayId = result.insertId;
@@ -343,8 +357,11 @@ module.exports = {
         winnerText = winnerIds.map(id => `<@${id}>`).join(', ');
       }
 
-      const endTime = new Date(giveaway.endTime + 'Z').getTime();
-      const endTimestamp = Math.floor(endTime / 1000);
+      let endTimestamp = Number(giveaway.endTime);
+      if (endTimestamp > 1e12) {
+        // if milliseconds, convert
+        endTimestamp = Math.floor(endTimestamp / 1000);
+      }
       
       const finalEmbed = new EmbedBuilder()
         .setTitle('GIVEAWAY ENDED')
@@ -417,8 +434,23 @@ module.exports = {
             continue;
           }
 
-          const endTime = new Date(giveaway.endTime + 'Z').getTime();
-          const remainingTime = endTime - Date.now();
+          // Robust timestamp handling
+          let endTimestamp = Number(giveaway.endTime);
+          let endTimeMs;
+
+          // If it’s clearly a number (UNIX seconds), multiply by 1000
+          if (!isNaN(endTimestamp) && endTimestamp < 1e12) {
+            endTimeMs = endTimestamp * 1000;
+          } else if (!isNaN(endTimestamp) && endTimestamp > 1e12) {
+            endTimeMs = endTimestamp; // already in ms
+          } else {
+            // fallback if DB stored as string
+            const parsed = new Date(giveaway.endTime);
+            endTimeMs = !isNaN(parsed.getTime()) ? parsed.getTime() : Date.now();
+            endTimestamp = Math.floor(endTimeMs / 1000);
+          }
+
+          const remainingTime = endTimeMs - Date.now();
           
           if (remainingTime <= 0) {
             await this.endGiveaway(message, giveaway.id);
