@@ -343,7 +343,7 @@ module.exports = {
         winnerText = winnerIds.map(id => `<@${id}>`).join(', ');
       }
 
-      const endTime = new Date(giveaway.endTime).getTime();
+      const endTime = new Date(giveaway.endTime + 'Z').getTime();
       const endTimestamp = Math.floor(endTime / 1000);
       
       const finalEmbed = new EmbedBuilder()
@@ -417,7 +417,7 @@ module.exports = {
             continue;
           }
 
-          const endTime = new Date(giveaway.endTime).getTime();
+          const endTime = new Date(giveaway.endTime + 'Z').getTime();
           const remainingTime = endTime - Date.now();
           
           if (remainingTime <= 0) {
