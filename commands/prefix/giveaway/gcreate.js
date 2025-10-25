@@ -12,12 +12,10 @@ const _specialEntries = [
 
 const activeCollectors = new Map();
 
-// Helper function to convert Unix timestamp to MySQL DATETIME
 function unixToMySQLDatetime(unixTimestamp) {
   return new Date(unixTimestamp * 1000).toISOString().slice(0, 19).replace('T', ' ');
 }
 
-// Helper function to convert milliseconds to MySQL DATETIME
 function msToMySQLDatetime(msTimestamp) {
   return new Date(msTimestamp).toISOString().slice(0, 19).replace('T', ' ');
 }
@@ -129,15 +127,6 @@ module.exports = {
     const endTime = Date.now() + duration;
     const endTimestamp = Math.floor(endTime / 1000);
 
-    // Debug logging
-    console.log(`[GIVEAWAY DEBUG] Current time: ${Date.now()}`);
-    console.log(`[GIVEAWAY DEBUG] Duration: ${duration}ms`);
-    console.log(`[GIVEAWAY DEBUG] End time (ms): ${endTime}`);
-    console.log(`[GIVEAWAY DEBUG] End timestamp (seconds): ${endTimestamp}`);
-    console.log(`[GIVEAWAY DEBUG] Human readable: ${new Date(endTime).toISOString()}`);
-    console.log(`[GIVEAWAY DEBUG] MySQL DATETIME: ${msToMySQLDatetime(endTime)}`);
-
-    // Validate timestamp is in the future
     if (endTimestamp <= Math.floor(Date.now() / 1000)) {
       return message.channel.send({
         embeds: [
@@ -175,7 +164,6 @@ module.exports = {
         components: [joinButton]
       });
 
-      // Convert to MySQL DATETIME format
       const endTimeMySQL = msToMySQLDatetime(endTime);
 
       const [result] = await db.pool.execute(
@@ -187,7 +175,7 @@ module.exports = {
           message.guild.id,
           prize,
           winners,
-          endTimeMySQL, // Store as MySQL DATETIME
+          endTimeMySQL,
           role.id,
           JSON.stringify([]),
           message.author.id,
@@ -368,12 +356,10 @@ module.exports = {
         winnerText = winnerIds.map(id => `<@${id}>`).join(', ');
       }
 
-      // Convert MySQL DATETIME back to timestamp for Discord
       let endTimestamp;
       if (giveaway.endTime instanceof Date) {
         endTimestamp = Math.floor(giveaway.endTime.getTime() / 1000);
       } else {
-        // If it's a string, parse it
         const endTimeDate = new Date(giveaway.endTime);
         endTimestamp = Math.floor(endTimeDate.getTime() / 1000);
       }
@@ -449,7 +435,6 @@ module.exports = {
             continue;
           }
 
-          // Convert MySQL DATETIME to milliseconds
           let endTimeMs;
           if (giveaway.endTime instanceof Date) {
             endTimeMs = giveaway.endTime.getTime();
@@ -464,12 +449,10 @@ module.exports = {
             continue;
           }
 
-          // Convert to timestamp for Discord
           const endTimestamp = Math.floor(endTimeMs / 1000);
 
           const oldEmbed = message.embeds[0];
           
-          // Fix the timestamp replacement
           let newDescription = oldEmbed.description;
           if (newDescription) {
             newDescription = newDescription.replace(/<t:\d+:R>/g, `<t:${endTimestamp}:R>`);
