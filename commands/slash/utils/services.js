@@ -16,14 +16,25 @@ async function initializeServicesTable() {
             )
         `);
 
+        // First create the table without categoryId (for existing installations)
         await db.pool.execute(`
             CREATE TABLE IF NOT EXISTS service_settings (
                 guildId VARCHAR(255) PRIMARY KEY,
                 staffRoleId VARCHAR(255),
-                categoryId VARCHAR(255),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
+
+        // Check if categoryId column exists, if not, add it
+        try {
+            await db.pool.execute('SELECT categoryId FROM service_settings LIMIT 1');
+        } catch (error) {
+            if (error.code === 'ER_BAD_FIELD_ERROR') {
+                console.log('🔄 Adding categoryId column to service_settings table...');
+                await db.pool.execute('ALTER TABLE service_settings ADD COLUMN categoryId VARCHAR(255)');
+                console.log('✅ categoryId column added successfully');
+            }
+        }
 
         await db.pool.execute(`
             CREATE TABLE IF NOT EXISTS service_tickets (
@@ -95,12 +106,8 @@ module.exports = {
         // Check if user has MANAGE_GUILD permission
         if (!interaction.memberPermissions.has(PermissionsBitField.Flags.ManageGuild)) {
             return interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setDescription('❌ You need the `Manage Server` permission to use this command.')
-                ],
-                ephemeral: true
+                content: '❌ You need the `Manage Server` permission to use this command.',
+                flags: 64 // Ephemeral flag
             });
         }
 
@@ -132,12 +139,8 @@ module.exports = {
 
             if (services.length === 0) {
                 return interaction.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xFFA500)
-                            .setDescription('❌ No services found. Use `/services add` to add services first.')
-                    ],
-                    ephemeral: true
+                    content: '❌ No services found. Use `/services add` to add services first.',
+                    flags: 64
                 });
             }
 
@@ -161,6 +164,7 @@ module.exports = {
             // Create the embed
             const embed = new EmbedBuilder()
                 .setTitle('DevArc • Services')
+                .setThumbnail(interaction.guild.iconURL({ dynamic: true }))
                 .setDescription('Select a service from the dropdown below to get more information or access the service.')
                 .setColor(0x0099FF)
                 .setFooter({ text: `Services • ${interaction.guild.name}` })
@@ -174,29 +178,21 @@ module.exports = {
 
             // Reply to the interaction with a success message (ephemeral)
             await interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0x00FF00)
-                        .setDescription('✅ Services embed sent successfully!')
-                ],
-                ephemeral: true
+                content: '✅ Services embed sent successfully!',
+                flags: 64
             });
 
         } catch (error) {
             console.error('Error sending services embed:', error);
             await interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setDescription('❌ There was an error creating the services embed.')
-                ],
-                ephemeral: true
+                content: '❌ There was an error creating the services embed.',
+                flags: 64
             });
         }
     },
 
     async handleAdd(interaction) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
 
         const serviceName = interaction.options.getString('service');
         const serviceDescription = interaction.options.getString('description') || 'No description provided';
@@ -204,12 +200,7 @@ module.exports = {
         // Validate service name length for Discord limitations
         if (serviceName.length > 100) {
             return interaction.editReply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setDescription('❌ Service name must be less than 100 characters.')
-                ],
-                ephemeral: true
+                content: '❌ Service name must be less than 100 characters.'
             });
         }
 
@@ -222,12 +213,7 @@ module.exports = {
 
             if (existingServices.length > 0) {
                 return interaction.editReply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xFF0000)
-                            .setDescription(`❌ Service **"${serviceName}"** already exists.`)
-                    ],
-                    ephemeral: true
+                    content: `❌ Service **"${serviceName}"** already exists.`
                 });
             }
 
@@ -247,25 +233,19 @@ module.exports = {
                         )
                         .setFooter({ text: `Added by ${interaction.user.tag}` })
                         .setTimestamp()
-                ],
-                ephemeral: true
+                ]
             });
 
         } catch (error) {
             console.error('Error adding service:', error);
             await interaction.editReply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setDescription('❌ There was an error adding the service.')
-                ],
-                ephemeral: true
+                content: '❌ There was an error adding the service.'
             });
         }
     },
 
     async handleRemove(interaction) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
 
         try {
             // Fetch all services for this guild
@@ -276,12 +256,7 @@ module.exports = {
 
             if (services.length === 0) {
                 return interaction.editReply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xFFA500)
-                            .setDescription('❌ No services found to remove.')
-                    ],
-                    ephemeral: true
+                    content: '❌ No services found to remove.'
                 });
             }
 
@@ -313,25 +288,19 @@ module.exports = {
 
             await interaction.editReply({
                 embeds: [embed],
-                components: [actionRow],
-                ephemeral: true
+                components: [actionRow]
             });
 
         } catch (error) {
             console.error('Error in remove services:', error);
             await interaction.editReply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setDescription('❌ There was an error fetching services.')
-                ],
-                ephemeral: true
+                content: '❌ There was an error fetching services.'
             });
         }
     },
 
     async handleStaff(interaction) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
 
         const staffRole = interaction.options.getRole('role');
 
@@ -357,11 +326,7 @@ module.exports = {
         } catch (error) {
             console.error('Error setting staff role:', error);
             await interaction.editReply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setDescription('❌ There was an error setting the staff role.')
-                ]
+                content: '❌ There was an error setting the staff role.'
             });
         }
     },
@@ -397,7 +362,7 @@ module.exports = {
 
     async handleServiceSelect(interaction) {
         // Defer the reply immediately to avoid interaction timeout
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
 
         try {
             const serviceId = interaction.values[0];
@@ -410,11 +375,7 @@ module.exports = {
 
             if (services.length === 0) {
                 return interaction.editReply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xFF0000)
-                            .setDescription('❌ Service not found.')
-                    ]
+                    content: '❌ Service not found.'
                 });
             }
 
@@ -428,22 +389,14 @@ module.exports = {
 
             if (settings.length === 0 || !settings[0].staffRoleId) {
                 return interaction.editReply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xFFA500)
-                            .setDescription('❌ Staff role is not configured. Use `/services staff` to set it up first.')
-                    ]
+                    content: '❌ Staff role is not configured. Use `/services staff` to set it up first.'
                 });
             }
 
             const staffRole = interaction.guild.roles.cache.get(settings[0].staffRoleId);
             if (!staffRole) {
                 return interaction.editReply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xFFA500)
-                            .setDescription('❌ Configured staff role not found. Please reconfigure with `/services staff`.')
-                    ]
+                    content: '❌ Configured staff role not found. Please reconfigure with `/services staff`.'
                 });
             }
 
@@ -468,13 +421,21 @@ module.exports = {
                     ]
                 });
 
-                // Store category ID in database
-                await db.pool.execute(
-                    `INSERT INTO service_settings (guildId, staffRoleId, categoryId) 
-                     VALUES (?, ?, ?) 
-                     ON DUPLICATE KEY UPDATE categoryId = ?`,
-                    [interaction.guild.id, staffRole.id, servicesCategory.id, servicesCategory.id]
-                );
+                // Store category ID in database - with error handling for missing column
+                try {
+                    await db.pool.execute(
+                        `INSERT INTO service_settings (guildId, staffRoleId, categoryId) 
+                         VALUES (?, ?, ?) 
+                         ON DUPLICATE KEY UPDATE categoryId = ?`,
+                        [interaction.guild.id, staffRole.id, servicesCategory.id, servicesCategory.id]
+                    );
+                } catch (error) {
+                    if (error.code === 'ER_BAD_FIELD_ERROR') {
+                        console.log('categoryId column not available, skipping category storage');
+                    } else {
+                        throw error;
+                    }
+                }
             }
 
             // Create private channel for the service request
@@ -570,29 +531,21 @@ module.exports = {
             }
 
             await interaction.editReply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setDescription(errorMessage)
-                ]
+                content: errorMessage
             });
             return true;
         }
     },
 
     async handleClaimTicket(interaction) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
 
         const channelId = interaction.customId.replace('claim_ticket_', '');
         const channel = interaction.guild.channels.cache.get(channelId);
 
         if (!channel) {
             return interaction.editReply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setDescription('❌ Channel not found.')
-                ]
+                content: '❌ Channel not found.'
             });
         }
 
@@ -611,11 +564,7 @@ module.exports = {
 
             if (tickets.length === 0) {
                 return interaction.editReply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xFF0000)
-                            .setDescription('❌ Ticket not found in database.')
-                    ]
+                    content: '❌ Ticket not found in database.'
                 });
             }
 
@@ -637,11 +586,7 @@ module.exports = {
             }
 
             await interaction.editReply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0x00FF00)
-                        .setDescription('✅ Ticket claimed successfully!')
-                ]
+                content: '✅ Ticket claimed successfully!'
             });
 
             // Notify the channel
@@ -654,11 +599,7 @@ module.exports = {
         } catch (error) {
             console.error('Error claiming ticket:', error);
             await interaction.editReply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setDescription('❌ There was an error claiming the ticket.')
-                ]
+                content: '❌ There was an error claiming the ticket.'
             });
             return true;
         }
@@ -690,7 +631,7 @@ module.exports = {
     },
 
     async handleCloseModal(interaction) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
 
         const channelId = interaction.customId.replace('close_modal_', '');
         const closeReason = interaction.fields.getTextInputValue('close_reason');
@@ -698,11 +639,7 @@ module.exports = {
 
         if (!channel) {
             return interaction.editReply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setDescription('❌ Channel not found.')
-                ]
+                content: '❌ Channel not found.'
             });
         }
 
@@ -715,11 +652,7 @@ module.exports = {
 
             if (tickets.length === 0) {
                 return interaction.editReply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xFF0000)
-                            .setDescription('❌ Ticket not found in database.')
-                    ]
+                    content: '❌ Ticket not found in database.'
                 });
             }
 
@@ -755,11 +688,7 @@ module.exports = {
             await channel.delete('Service ticket closed');
 
             await interaction.editReply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0x00FF00)
-                        .setDescription('✅ Ticket closed and channel deleted successfully!')
-                ]
+                content: '✅ Ticket closed and channel deleted successfully!'
             });
 
             return true;
@@ -767,11 +696,7 @@ module.exports = {
         } catch (error) {
             console.error('Error closing ticket:', error);
             await interaction.editReply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setDescription('❌ There was an error closing the ticket.')
-                ]
+                content: '❌ There was an error closing the ticket.'
             });
             return true;
         }
@@ -781,12 +706,8 @@ module.exports = {
         // Check permissions again
         if (!interaction.memberPermissions.has(PermissionsBitField.Flags.ManageGuild)) {
             return interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setDescription('❌ You need the `Manage Server` permission to remove services.')
-                ],
-                ephemeral: true
+                content: '❌ You need the `Manage Server` permission to remove services.',
+                flags: 64
             });
         }
 
@@ -825,12 +746,8 @@ module.exports = {
         } catch (error) {
             console.error('Error removing services:', error);
             await interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setDescription('❌ There was an error removing the selected services.')
-                ],
-                ephemeral: true
+                content: '❌ There was an error removing the selected services.',
+                flags: 64
             });
             return true;
         }
