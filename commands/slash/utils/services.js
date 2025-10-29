@@ -148,12 +148,8 @@ module.exports = {
             const embed = new EmbedBuilder()
                 .setTitle('🏢 Server Services')
                 .setDescription('Select a service from the dropdown below to get more information or access the service.')
-                .addFields(
-                    { name: 'Available Services', value: `**${services.length}** service(s) available`, inline: true },
-                    { name: 'How to Use', value: 'Use the dropdown menu below to select a service', inline: true }
-                )
                 .setColor(0x0099FF)
-                .setFooter({ text: `Services Manager • ${interaction.guild.name}` })
+                .setFooter({ text: 'Use the dropdown menu below to select a service' })
                 .setTimestamp();
 
             await interaction.editReply({
