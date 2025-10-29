@@ -696,8 +696,6 @@ module.exports = {
 
         const channelId = interaction.customId.replace('close_modal_', '');
         const closeReason = interaction.fields.getTextInputValue('close_reason');
-        
-        console.log(`🔧 Debug: Closing ticket for channel: ${channelId}`);
 
         try {
             // Check database connection first
@@ -749,7 +747,6 @@ module.exports = {
             const ticket = tickets[0];
 
             // Update ticket in database
-            console.log('🔧 Debug: Updating ticket in database...');
             await db.pool.execute(
                 'UPDATE service_tickets SET status = ?, closeReason = ?, closedAt = NOW() WHERE channelId = ?',
                 ['closed', closeReason, channelId]
