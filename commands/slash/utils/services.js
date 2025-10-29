@@ -70,7 +70,7 @@ module.exports = {
                 .addRoleOption(option =>
                     option
                         .setName('role')
-                        .setDescription('The staff role to mention in service threads')
+                        .setDescription('The staff role to mention in service channels')
                         .setRequired(true)
                 )
         ),
@@ -350,7 +350,7 @@ module.exports = {
         }
     },
 
-    // Component handler for the select menus - FIXED VERSION
+    // Component handler for the select menus
     handleComponent: async function(interaction) {
         if (!interaction.isStringSelectMenu()) return false;
 
@@ -417,35 +417,59 @@ module.exports = {
                 });
             }
 
-            // Check if channel supports threads
-            if (!interaction.channel.isThread() && !interaction.channel.threads) {
-                return interaction.editReply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0xFF0000)
-                            .setDescription('❌ This channel does not support threads.')
+            // Find or create "Services" category
+            let servicesCategory = interaction.guild.channels.cache.find(
+                channel => channel.name === 'Services' && channel.type === ChannelType.GuildCategory
+            );
+
+            if (!servicesCategory) {
+                servicesCategory = await interaction.guild.channels.create({
+                    name: 'Services',
+                    type: ChannelType.GuildCategory,
+                    permissionOverwrites: [
+                        {
+                            id: interaction.guild.id, // @everyone role
+                            deny: [PermissionsBitField.Flags.ViewChannel]
+                        },
+                        {
+                            id: staffRole.id,
+                            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+                        }
                     ]
                 });
             }
 
-            // Create thread name using user's name
+            // Create private channel for the service request
             const userName = interaction.user.username;
-            const threadName = `${userName}-service`.substring(0, 100); // Discord thread name limit
+            const channelName = `${userName}-service`.toLowerCase().replace(/[^a-z0-9-]/g, '-').substring(0, 100);
 
-            // Create private thread - FIXED: Use ChannelType.PrivateThread instead of string
-            const thread = await interaction.channel.threads.create({
-                name: threadName,
-                autoArchiveDuration: 1440, // 24 hours
-                type: ChannelType.PrivateThread, // Use the enum value instead of string
+            const serviceChannel = await interaction.guild.channels.create({
+                name: channelName,
+                type: ChannelType.GuildText,
+                parent: servicesCategory.id,
+                permissionOverwrites: [
+                    {
+                        id: interaction.guild.id, // @everyone role
+                        deny: [PermissionsBitField.Flags.ViewChannel]
+                    },
+                    {
+                        id: interaction.user.id, // The user who requested the service
+                        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory]
+                    },
+                    {
+                        id: staffRole.id, // Staff role
+                        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory]
+                    },
+                    {
+                        id: interaction.client.user.id, // Bot
+                        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory]
+                    }
+                ],
                 reason: `Service request for ${service.name} by ${interaction.user.tag}`
             });
 
-            // Add the user and staff role to the thread
-            await thread.members.add(interaction.user.id);
-            await thread.members.add(interaction.client.user.id); // Add bot
-
-            // Send thread welcome message
-            const threadEmbed = new EmbedBuilder()
+            // Send welcome message in the new channel
+            const channelEmbed = new EmbedBuilder()
                 .setTitle(`🏢 ${service.name} Service Request`)
                 .setDescription(`Hello ${interaction.user.toString()}, thank you for requesting **${service.name}**!`)
                 .addFields(
@@ -457,10 +481,9 @@ module.exports = {
                 .setFooter({ text: 'A staff member will assist you shortly.' })
                 .setTimestamp();
 
-            // Mention staff role in the thread
-            await thread.send({
+            await serviceChannel.send({
                 content: `${staffRole.toString()} - New service request from ${interaction.user.toString()}!`,
-                embeds: [threadEmbed]
+                embeds: [channelEmbed]
             });
 
             // Send confirmation to user
@@ -468,8 +491,8 @@ module.exports = {
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0x00FF00)
-                        .setDescription(`✅ Created private thread for **${service.name}**: ${thread.toString()}`)
-                        .setFooter({ text: 'Please check the thread for further assistance' })
+                        .setDescription(`✅ Created private channel for **${service.name}**: ${serviceChannel.toString()}`)
+                        .setFooter({ text: 'Please check the channel for further assistance' })
                 ]
             });
 
@@ -480,22 +503,18 @@ module.exports = {
             
             let errorMessage = '❌ There was an error processing your selection.';
             
-            if (error.code === 50035) { // Invalid form body (likely thread name too long)
-                errorMessage = '❌ Could not create thread. Username might be too long.';
-            } else if (error.code === 50013) { // Missing permissions
-                errorMessage = '❌ Bot lacks permissions to create threads in this channel.';
-            } else if (error.code === 160002) { // Thread creation not allowed
-                errorMessage = '❌ Thread creation is not enabled in this channel.';
+            if (error.code === 50013) { // Missing permissions
+                errorMessage = '❌ Bot lacks permissions to create channels or manage permissions.';
+            } else if (error.code === 30013) { // Maximum channels reached
+                errorMessage = '❌ Maximum number of channels reached in this server.';
             }
 
-            // Use followUp instead of editReply since we already deferred
-            await interaction.followUp({
+            await interaction.editReply({
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0xFF0000)
                         .setDescription(errorMessage)
-                ],
-                ephemeral: true
+                ]
             });
             return true;
         }
