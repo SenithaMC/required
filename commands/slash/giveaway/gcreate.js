@@ -24,13 +24,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('gcreate')
     .setDescription('Create a new giveaway with button interaction')
-    .addIntegerOption(option =>
-      option
-        .setName('winners')
-        .setDescription('Number of winners (default: 1)')
-        .setMinValue(1)
-        .setMaxValue(50)
-    )
+    // REQUIRED OPTIONS FIRST
     .addStringOption(option =>
       option
         .setName('prize')
@@ -43,10 +37,20 @@ module.exports = {
         .setDescription('Duration of the giveaway (e.g., 1h, 30m, 7d)')
         .setRequired(true)
     )
+    // OPTIONAL OPTIONS AFTER REQUIRED
+    .addIntegerOption(option =>
+      option
+        .setName('winners')
+        .setDescription('Number of winners (default: 1)')
+        .setMinValue(1)
+        .setMaxValue(50)
+        .setRequired(false)
+    )
     .addRoleOption(option =>
       option
         .setName('role')
         .setDescription('Role required to join (default: @everyone)')
+        .setRequired(false)
     ),
 
   async execute(interaction) {
@@ -63,9 +67,10 @@ module.exports = {
 
     await interaction.deferReply({ ephemeral: true });
 
-    const winners = interaction.options.getInteger('winners') || 1;
+    // Get options in the new order
     const prize = interaction.options.getString('prize');
     const durationString = interaction.options.getString('duration');
+    const winners = interaction.options.getInteger('winners') || 1;
     const role = interaction.options.getRole('role') || interaction.guild.roles.everyone;
 
     const duration = ms(durationString);
