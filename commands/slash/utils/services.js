@@ -470,11 +470,10 @@ module.exports = {
 
             // Send welcome message in the new channel
             const channelEmbed = new EmbedBuilder()
-                .setTitle(`🏢 ${service.name} Service Request`)
+                .setTitle(`🏢 ${service.name} Request`)
                 .setDescription(`Hello ${interaction.user.toString()}, thank you for requesting **${service.name}**!`)
                 .addFields(
                     { name: 'Service Description', value: service.description || 'No description provided', inline: false },
-                    { name: 'Status', value: '🟡 Waiting for staff response', inline: true },
                     { name: 'Requested By', value: interaction.user.toString(), inline: true }
                 )
                 .setColor(0x0099FF)
