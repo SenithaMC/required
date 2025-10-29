@@ -1,6 +1,29 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, PermissionsBitField } = require('discord.js');
 const db = require('../../../utils/db');
 
+// Initialize database table if it doesn't exist
+async function initializeServicesTable() {
+    try {
+        await db.pool.execute(`
+            CREATE TABLE IF NOT EXISTS services (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                guildId VARCHAR(255) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                createdBy VARCHAR(255) NOT NULL,
+                createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_guild_service (guildId, name)
+            )
+        `);
+        console.log('✅ Services table initialized');
+    } catch (error) {
+        console.error('❌ Error initializing services table:', error);
+    }
+}
+
+// Call initialization
+initializeServicesTable();
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('services')
@@ -62,7 +85,7 @@ module.exports = {
     },
 
     async handleEmbed(interaction) {
-        await interaction.deferReply({ ephemeral: true }); // Make defer ephemeral
+        await interaction.deferReply(); // NOT ephemeral - we want the embed to be public
 
         try {
             // Fetch all services for this guild
@@ -78,7 +101,7 @@ module.exports = {
                             .setColor(0xFFA500)
                             .setDescription('❌ No services found. Use `/services add` to add services first.')
                     ],
-                    ephemeral: true
+                    ephemeral: true // This error message IS ephemeral
                 });
             }
 
@@ -113,8 +136,8 @@ module.exports = {
 
             await interaction.editReply({
                 embeds: [embed],
-                components: [actionRow],
-                ephemeral: true // Make the embed ephemeral too
+                components: [actionRow]
+                // NOT ephemeral - this is the main services embed that should be public
             });
 
         } catch (error) {
@@ -125,7 +148,7 @@ module.exports = {
                         .setColor(0xFF0000)
                         .setDescription('❌ There was an error creating the services embed.')
                 ],
-                ephemeral: true
+                ephemeral: true // Error IS ephemeral
             });
         }
     },
@@ -265,8 +288,8 @@ module.exports = {
         }
     },
 
-    // Component handler for the select menus
-    handleComponent: async (interaction) => {
+    // Component handler for the select menus - FIXED VERSION
+    handleComponent: async function(interaction) {
         if (!interaction.isStringSelectMenu()) return false;
 
         if (interaction.customId === 'services_select') {
