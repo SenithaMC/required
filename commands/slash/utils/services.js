@@ -440,7 +440,7 @@ module.exports = {
 
             // Create private channel for the service request
             const userName = interaction.user.username;
-            const channelName = `${userName}-service`.toLowerCase().replace(/[^a-z0-9-]/g, '-').substring(0, 100);
+            const channelName = `${userName}-request`.toLowerCase().replace(/[^a-z0-9-]/g, '-').substring(0, 100);
 
             const serviceChannel = await interaction.guild.channels.create({
                 name: channelName,
