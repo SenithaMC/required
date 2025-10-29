@@ -691,76 +691,73 @@ module.exports = {
     },
 
     async handleCloseModal(interaction) {
-        // Add immediate acknowledgment to prevent timeout
-        await interaction.deferReply({ flags: 64 });
-
-        const channelId = interaction.customId.replace('close_modal_', '');
-        const closeReason = interaction.fields.getTextInputValue('close_reason');
+        console.log('🔧 DEBUG: Modal submission started');
         
-        console.log(`🔧 Debug: Closing ticket for channel: ${channelId}`);
-
         try {
-            // Check database connection first
+            console.log('🔧 DEBUG: Attempting to defer reply...');
+            await interaction.deferReply({ flags: 64 });
+            console.log('✅ DEBUG: Reply deferred successfully');
+
+            const channelId = interaction.customId.replace('close_modal_', '');
+            const closeReason = interaction.fields.getTextInputValue('close_reason');
+            
+            console.log('🔧 DEBUG: Modal data extracted:', {
+                channelId: channelId,
+                closeReasonLength: closeReason.length
+            });
+
+            console.log('🔧 DEBUG: Looking for channel...');
+            const channel = interaction.guild.channels.cache.get(channelId);
+
+            if (!channel) {
+                console.log('❌ DEBUG: Channel not found:', channelId);
+                return await interaction.editReply({
+                    content: '❌ Channel not found.'
+                });
+            }
+            console.log('✅ DEBUG: Channel found:', channel.name);
+
+            console.log('🔧 DEBUG: Checking database connection...');
             try {
                 await db.pool.execute('SELECT 1');
+                console.log('✅ DEBUG: Database connection OK');
             } catch (dbError) {
-                console.error('❌ Database connection error:', dbError);
+                console.error('❌ DEBUG: Database connection failed:', dbError);
                 return await interaction.editReply({
-                    content: '❌ Database connection error. Please try again later.'
+                    content: '❌ Database connection error.'
                 });
             }
 
-            const channel = interaction.guild.channels.cache.get(channelId);
-            
-            if (!channel) {
-                console.log('❌ Channel not found:', channelId);
-                return await interaction.editReply({
-                    content: '❌ Ticket channel no longer exists.'
-                });
-            }
-
-            // Check bot permissions
-            const botPermissions = channel.permissionsFor(interaction.guild.members.me);
-            if (!botPermissions.has(PermissionsBitField.Flags.ManageChannels)) {
-                return await interaction.editReply({
-                    content: '❌ I do not have permission to manage this channel.'
-                });
-            }
-
-            if (!botPermissions.has(PermissionsBitField.Flags.SendMessages)) {
-                return await interaction.editReply({
-                    content: '❌ I do not have permission to send messages in this channel.'
-                });
-            }
-
-            // Get ticket info first
+            console.log('🔧 DEBUG: Querying ticket from database...');
             const [tickets] = await db.pool.execute(
                 'SELECT * FROM service_tickets WHERE channelId = ?',
                 [channelId]
             );
 
             if (tickets.length === 0) {
-                console.log('❌ No ticket found for channel:', channelId);
+                console.log('❌ DEBUG: No ticket found in database');
                 return await interaction.editReply({
                     content: '❌ Ticket not found in database.'
                 });
             }
+            console.log('✅ DEBUG: Ticket found in database');
 
             const ticket = tickets[0];
 
-            // Update ticket in database
-            console.log('🔧 Debug: Updating ticket in database...');
+            console.log('🔧 DEBUG: Updating ticket in database...');
             await db.pool.execute(
                 'UPDATE service_tickets SET status = ?, closeReason = ?, closedAt = NOW() WHERE channelId = ?',
                 ['closed', closeReason, channelId]
             );
-
-            console.log('✅ Ticket updated in database');
+            console.log('✅ DEBUG: Ticket updated in database');
 
             // Try to DM the user
             let dmSent = false;
+            console.log('🔧 DEBUG: Attempting to DM user...');
             try {
                 const user = await interaction.client.users.fetch(ticket.userId);
+                console.log('✅ DEBUG: User fetched:', user.tag);
+                
                 const dmEmbed = new EmbedBuilder()
                     .setTitle('Service Ticket Closed')
                     .setDescription(`Your service request in **${interaction.guild.name}** has been closed.`)
@@ -773,61 +770,62 @@ module.exports = {
 
                 await user.send({ embeds: [dmEmbed] });
                 dmSent = true;
-                console.log('✅ DM sent to user');
+                console.log('✅ DEBUG: DM sent successfully');
             } catch (dmError) {
-                console.log('⚠️ Could not DM user:', dmError.message);
+                console.log('⚠️ DEBUG: Could not DM user:', dmError.message);
                 dmSent = false;
             }
 
-            // Send final message to channel
+            console.log('🔧 DEBUG: Sending close message to channel...');
             const closeEmbed = new EmbedBuilder()
                 .setTitle('Ticket Closed')
                 .setDescription(`This ticket has been closed by ${interaction.user.toString()}`)
-                .addFields({ name: 'Reason', value: closeReason.substring(0, 1000) })
+                .addFields(
+                    { name: 'Reason', value: closeReason.substring(0, 1000), inline: false }
+                )
                 .setColor(0xFF0000)
                 .setTimestamp();
 
             if (!dmSent) {
-                closeEmbed.addFields({
-                    name: 'Note', 
-                    value: 'Could not send DM to user. They may have DMs disabled.', 
-                    inline: false 
-                });
+                closeEmbed.addFields(
+                    { name: 'Note', value: 'Could not send DM to user. They may have DMs disabled.', inline: false }
+                );
             }
 
             await channel.send({ embeds: [closeEmbed] });
-            console.log('✅ Close message sent to channel');
+            console.log('✅ DEBUG: Close message sent to channel');
 
-            // Delete channel after short delay
+            console.log('🔧 DEBUG: Scheduling channel deletion...');
+            // Wait a moment for the message to be seen, then delete the channel
             setTimeout(async () => {
                 try {
+                    console.log('🔧 DEBUG: Attempting to delete channel...');
                     await channel.delete('Service ticket closed');
-                    console.log('✅ Channel deleted successfully');
+                    console.log('✅ DEBUG: Channel deleted successfully');
                 } catch (deleteError) {
-                    console.error('❌ Error deleting channel:', deleteError);
+                    console.error('❌ DEBUG: Error deleting channel:', deleteError);
                 }
-            }, 3000);
+            }, 2000);
 
+            console.log('🔧 DEBUG: Sending final response to user...');
             await interaction.editReply({
                 content: `✅ Ticket closed${dmSent ? ' and user notified' : ''}! Channel will be deleted shortly.`
             });
 
+            console.log('✅ DEBUG: Modal submission completed successfully');
             return true;
 
         } catch (error) {
-            console.error('❌ Error in handleCloseModal:', error);
-            let errorMessage = '❌ There was an error closing the ticket. Please try again or contact an administrator.';
+            console.error('❌ DEBUG: Error in handleCloseModal:', error);
+            console.error('❌ DEBUG: Error stack:', error.stack);
             
-            // Provide more specific error messages
-            if (error.code === 50001) { // Missing Access
-                errorMessage = '❌ I do not have access to the ticket channel.';
-            } else if (error.code === 50013) { // Missing Permissions
-                errorMessage = '❌ I lack permissions to manage the ticket channel.';
+            try {
+                await interaction.editReply({
+                    content: `❌ There was an error closing the ticket: ${error.message}`
+                });
+            } catch (replyError) {
+                console.error('❌ DEBUG: Could not send error message:', replyError);
             }
-            
-            await interaction.editReply({
-                content: errorMessage
-            });
             return true;
         }
     },
