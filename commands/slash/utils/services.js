@@ -107,8 +107,6 @@ module.exports = {
     },
 
     async handleEmbed(interaction) {
-        await interaction.channel.send(); // NOT ephemeral - we want the embed to be public
-
         try {
             // Fetch all services for this guild
             const [services] = await db.pool.execute(
@@ -117,13 +115,13 @@ module.exports = {
             );
 
             if (services.length === 0) {
-                return interaction.editReply({
+                return interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xFFA500)
                             .setDescription('❌ No services found. Use `/services add` to add services first.')
                     ],
-                    ephemeral: true // This error message IS ephemeral
+                    ephemeral: true
                 });
             }
 
@@ -152,21 +150,31 @@ module.exports = {
                 .setFooter({ text: `Services • ${interaction.guild.name}` })
                 .setTimestamp();
 
-            await interaction.editReply({
+            // Send the embed to the channel (not as a reply to the interaction)
+            await interaction.channel.send({
                 embeds: [embed],
                 components: [actionRow]
-                // NOT ephemeral - this is the main services embed that should be public
+            });
+
+            // Reply to the interaction with a success message (ephemeral)
+            await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0x00FF00)
+                        .setDescription('✅ Services embed sent successfully!')
+                ],
+                ephemeral: true
             });
 
         } catch (error) {
             console.error('Error sending services embed:', error);
-            await interaction.editReply({
+            await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0xFF0000)
                         .setDescription('❌ There was an error creating the services embed.')
                 ],
-                ephemeral: true // Error IS ephemeral
+                ephemeral: true
             });
         }
     },
