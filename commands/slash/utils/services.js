@@ -496,7 +496,7 @@ module.exports = {
                 .setTimestamp();
 
             await serviceChannel.send({
-                content: `\||${staffRole.toString()}||\ \n New service request from ${interaction.user.toString()}!`,
+                content: `||${staffRole.toString()}||\n New service request from ${interaction.user.toString()}!`,
                 embeds: [channelEmbed],
                 components: [buttonRow]
             });
@@ -550,13 +550,7 @@ module.exports = {
         }
 
         try {
-            // Update ticket in database
-            await db.pool.execute(
-                'UPDATE service_tickets SET claimedBy = ?, status = ? WHERE channelId = ?',
-                [interaction.user.id, 'claimed', channelId]
-            );
-
-            // Get ticket info
+            // Check if ticket is already claimed
             const [tickets] = await db.pool.execute(
                 'SELECT * FROM service_tickets WHERE channelId = ?',
                 [channelId]
@@ -570,6 +564,19 @@ module.exports = {
 
             const ticket = tickets[0];
 
+            // Check if already claimed
+            if (ticket.status === 'claimed') {
+                return interaction.editReply({
+                    content: '❌ This ticket has already been claimed.'
+                });
+            }
+
+            // Update ticket in database
+            await db.pool.execute(
+                'UPDATE service_tickets SET claimedBy = ?, status = ? WHERE channelId = ?',
+                [interaction.user.id, 'claimed', channelId]
+            );
+
             // Update the embed in the channel
             const messages = await channel.messages.fetch({ limit: 10 });
             const welcomeMessage = messages.find(msg => msg.embeds.length > 0 && msg.embeds[0].title?.includes('Request'));
@@ -579,9 +586,25 @@ module.exports = {
                 const newEmbed = EmbedBuilder.from(oldEmbed)
                     .spliceFields(2, 1, { name: 'Status', value: '🟢 **Claimed** - ' + interaction.user.toString(), inline: true });
 
+                // Create updated buttons with claim button disabled
+                const disabledClaimButton = new ButtonBuilder()
+                    .setCustomId(`claim_ticket_${channelId}`)
+                    .setLabel('Claimed')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(true)
+                    .setEmoji('🔓');
+
+                const closeButton = new ButtonBuilder()
+                    .setCustomId(`close_ticket_${channelId}`)
+                    .setLabel('Close')
+                    .setStyle(ButtonStyle.Danger)
+                    .setEmoji('🔒');
+
+                const updatedButtonRow = new ActionRowBuilder().addComponents(disabledClaimButton, closeButton);
+
                 await welcomeMessage.edit({
                     embeds: [newEmbed],
-                    components: welcomeMessage.components // Keep the same buttons
+                    components: [updatedButtonRow]
                 });
             }
 
@@ -608,22 +631,52 @@ module.exports = {
     async handleCloseTicket(interaction) {
         const channelId = interaction.customId.replace('close_ticket_', '');
         
+        // Check if channel still exists
+        const channel = interaction.guild.channels.cache.get(channelId);
+        if (!channel) {
+            return interaction.reply({
+                content: '❌ This ticket channel no longer exists.',
+                flags: 64
+            });
+        }
+
+        // Check if user has permission to close tickets
+        const [settings] = await db.pool.execute(
+            'SELECT * FROM service_settings WHERE guildId = ?',
+            [interaction.guild.id]
+        );
+
+        if (settings.length === 0 || !settings[0].staffRoleId) {
+            return interaction.reply({
+                content: '❌ Staff role is not configured.',
+                flags: 64
+            });
+        }
+
+        const staffRole = interaction.guild.roles.cache.get(settings[0].staffRoleId);
+        if (!staffRole || !interaction.member.roles.cache.has(staffRole.id)) {
+            return interaction.reply({
+                content: '❌ You do not have permission to close tickets.',
+                flags: 64
+            });
+        }
+
         // Create the modal
         const modal = new ModalBuilder()
             .setCustomId(`close_modal_${channelId}`)
-            .setTitle('Close Service Ticket');
-
-        // Add components to modal
-        const reasonInput = new TextInputBuilder()
-            .setCustomId('close_reason')
-            .setLabel('Reason for closing')
-            .setStyle(TextInputStyle.Paragraph)
-            .setPlaceholder('Enter the reason for closing this ticket...')
-            .setRequired(true)
-            .setMaxLength(1000);
-
-        const actionRow = new ActionRowBuilder().addComponents(reasonInput);
-        modal.addComponents(actionRow);
+            .setTitle('Close Service Ticket')
+            .setComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('close_reason')
+                        .setLabel('Reason for closing')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setPlaceholder('Enter the reason for closing this ticket...')
+                        .setRequired(true)
+                        .setMaxLength(1000)
+                        .setMinLength(10)
+                )
+            );
 
         // Show the modal to the user
         await interaction.showModal(modal);
@@ -664,31 +717,63 @@ module.exports = {
                 ['closed', closeReason, channelId]
             );
 
-            // Try to DM the user
+            // Try to DM the user with better error handling
+            let dmSent = false;
             try {
                 const user = await interaction.client.users.fetch(ticket.userId);
+                
+                // Check if user has DMs enabled by trying to send a test message
                 const dmEmbed = new EmbedBuilder()
                     .setTitle('Service Ticket Closed')
-                    .setDescription(`Your service request has been closed.`)
+                    .setDescription(`Your service request in **${interaction.guild.name}** has been closed.`)
                     .addFields(
                         { name: 'Service', value: 'Check original service for details', inline: true },
                         { name: 'Closed By', value: interaction.user.toString(), inline: true },
-                        { name: 'Reason', value: closeReason, inline: false }
+                        { name: 'Reason', value: closeReason.substring(0, 1000), inline: false }
                     )
                     .setColor(0xFFA500)
                     .setTimestamp();
 
                 await user.send({ embeds: [dmEmbed] });
+                dmSent = true;
             } catch (dmError) {
-                console.log('Could not DM user:', dmError);
-                // Continue even if DM fails
+                if (dmError.code === 50007) { // Cannot send messages to this user
+                    console.log(`User ${ticket.userId} has DMs disabled or blocked the bot`);
+                } else {
+                    console.log('Could not DM user:', dmError.message);
+                }
+                dmSent = false;
             }
 
-            // Delete the channel
-            await channel.delete('Service ticket closed');
+            // Send final message to channel before deletion
+            const closeEmbed = new EmbedBuilder()
+                .setTitle('Ticket Closed')
+                .setDescription(`This ticket has been closed by ${interaction.user.toString()}`)
+                .addFields(
+                    { name: 'Reason', value: closeReason.substring(0, 1000), inline: false }
+                )
+                .setColor(0xFF0000)
+                .setTimestamp();
+
+            if (!dmSent) {
+                closeEmbed.addFields(
+                    { name: 'Note', value: 'Could not send DM to user. They may have DMs disabled.', inline: false }
+                );
+            }
+
+            await channel.send({ embeds: [closeEmbed] });
+
+            // Wait a moment for the message to be seen, then delete the channel
+            setTimeout(async () => {
+                try {
+                    await channel.delete('Service ticket closed');
+                } catch (deleteError) {
+                    console.error('Error deleting channel:', deleteError);
+                }
+            }, 2000);
 
             await interaction.editReply({
-                content: '✅ Ticket closed and channel deleted successfully!'
+                content: `✅ Ticket closed${dmSent ? ' and user notified' : ''}! Channel will be deleted shortly.`
             });
 
             return true;
