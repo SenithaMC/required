@@ -496,7 +496,7 @@ module.exports = {
                 .setTimestamp();
 
             await serviceChannel.send({
-                content: `\`||${staffRole.toString()}||\`\n New service request from ${interaction.user.toString()}!`,
+                content: `\||${staffRole.toString()}||\\n New service request from ${interaction.user.toString()}!`,
                 embeds: [channelEmbed],
                 components: [buttonRow]
             });
