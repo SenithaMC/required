@@ -1,29 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, PermissionsBitField } = require('discord.js');
 const db = require('../../../utils/db');
 
-// Initialize database table if it doesn't exist
-async function initializeServicesTable() {
-    try {
-        await db.pool.execute(`
-            CREATE TABLE IF NOT EXISTS services (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                guildId VARCHAR(255) NOT NULL,
-                name VARCHAR(255) NOT NULL,
-                description TEXT,
-                createdBy VARCHAR(255) NOT NULL,
-                createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY unique_guild_service (guildId, name)
-            )
-        `);
-        console.log('✅ Services table initialized');
-    } catch (error) {
-        console.error('❌ Error initializing services table:', error);
-    }
-}
-
-// Call initialization
-initializeServicesTable();
-
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('services')
@@ -85,7 +62,7 @@ module.exports = {
     },
 
     async handleEmbed(interaction) {
-        await interaction.deferReply();
+        await interaction.deferReply({ ephemeral: true }); // Make defer ephemeral
 
         try {
             // Fetch all services for this guild
@@ -100,7 +77,8 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0xFFA500)
                             .setDescription('❌ No services found. Use `/services add` to add services first.')
-                    ]
+                    ],
+                    ephemeral: true
                 });
             }
 
@@ -135,7 +113,8 @@ module.exports = {
 
             await interaction.editReply({
                 embeds: [embed],
-                components: [actionRow]
+                components: [actionRow],
+                ephemeral: true // Make the embed ephemeral too
             });
 
         } catch (error) {
@@ -145,7 +124,8 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0xFF0000)
                         .setDescription('❌ There was an error creating the services embed.')
-                ]
+                ],
+                ephemeral: true
             });
         }
     },
@@ -163,7 +143,8 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0xFF0000)
                         .setDescription('❌ Service name must be less than 100 characters.')
-                ]
+                ],
+                ephemeral: true
             });
         }
 
@@ -180,7 +161,8 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0xFF0000)
                             .setDescription(`❌ Service **"${serviceName}"** already exists.`)
-                    ]
+                    ],
+                    ephemeral: true
                 });
             }
 
@@ -200,7 +182,8 @@ module.exports = {
                         )
                         .setFooter({ text: `Added by ${interaction.user.tag}` })
                         .setTimestamp()
-                ]
+                ],
+                ephemeral: true
             });
 
         } catch (error) {
@@ -210,7 +193,8 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0xFF0000)
                         .setDescription('❌ There was an error adding the service.')
-                ]
+                ],
+                ephemeral: true
             });
         }
     },
@@ -231,7 +215,8 @@ module.exports = {
                         new EmbedBuilder()
                             .setColor(0xFFA500)
                             .setDescription('❌ No services found to remove.')
-                    ]
+                    ],
+                    ephemeral: true
                 });
             }
 
@@ -263,7 +248,8 @@ module.exports = {
 
             await interaction.editReply({
                 embeds: [embed],
-                components: [actionRow]
+                components: [actionRow],
+                ephemeral: true
             });
 
         } catch (error) {
@@ -273,7 +259,8 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0xFF0000)
                         .setDescription('❌ There was an error fetching services.')
-                ]
+                ],
+                ephemeral: true
             });
         }
     },
