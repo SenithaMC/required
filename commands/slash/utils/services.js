@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, PermissionsBitField, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, PermissionsBitField, ChannelType, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const db = require('../../../utils/db');
 
 // Initialize database tables if they don't exist
@@ -20,7 +20,23 @@ async function initializeServicesTable() {
             CREATE TABLE IF NOT EXISTS service_settings (
                 guildId VARCHAR(255) PRIMARY KEY,
                 staffRoleId VARCHAR(255),
+                categoryId VARCHAR(255),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        await db.pool.execute(`
+            CREATE TABLE IF NOT EXISTS service_tickets (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                guildId VARCHAR(255) NOT NULL,
+                channelId VARCHAR(255) NOT NULL,
+                userId VARCHAR(255) NOT NULL,
+                serviceId INT NOT NULL,
+                claimedBy VARCHAR(255) DEFAULT NULL,
+                status ENUM('open', 'claimed', 'closed') DEFAULT 'open',
+                closeReason TEXT DEFAULT NULL,
+                createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                closedAt TIMESTAMP NULL DEFAULT NULL
             )
         `);
         console.log('✅ Services tables initialized');
@@ -350,16 +366,30 @@ module.exports = {
         }
     },
 
-    // Component handler for the select menus
+    // Component handler for the select menus, buttons, and modals
     handleComponent: async function(interaction) {
-        if (!interaction.isStringSelectMenu()) return false;
-
-        if (interaction.customId === 'services_select') {
-            return await this.handleServiceSelect(interaction);
+        if (interaction.isStringSelectMenu()) {
+            if (interaction.customId === 'services_select') {
+                return await this.handleServiceSelect(interaction);
+            }
+            if (interaction.customId === 'services_remove') {
+                return await this.handleServiceRemove(interaction);
+            }
         }
 
-        if (interaction.customId === 'services_remove') {
-            return await this.handleServiceRemove(interaction);
+        if (interaction.isButton()) {
+            if (interaction.customId.startsWith('claim_ticket_')) {
+                return await this.handleClaimTicket(interaction);
+            }
+            if (interaction.customId.startsWith('close_ticket_')) {
+                return await this.handleCloseTicket(interaction);
+            }
+        }
+
+        if (interaction.isModalSubmit()) {
+            if (interaction.customId.startsWith('close_modal_')) {
+                return await this.handleCloseModal(interaction);
+            }
         }
 
         return false;
@@ -437,6 +467,14 @@ module.exports = {
                         }
                     ]
                 });
+
+                // Store category ID in database
+                await db.pool.execute(
+                    `INSERT INTO service_settings (guildId, staffRoleId, categoryId) 
+                     VALUES (?, ?, ?) 
+                     ON DUPLICATE KEY UPDATE categoryId = ?`,
+                    [interaction.guild.id, staffRole.id, servicesCategory.id, servicesCategory.id]
+                );
             }
 
             // Create private channel for the service request
@@ -468,22 +506,45 @@ module.exports = {
                 reason: `Service request for ${service.name} by ${interaction.user.tag}`
             });
 
+            // Create claim and close buttons
+            const claimButton = new ButtonBuilder()
+                .setCustomId(`claim_ticket_${serviceChannel.id}`)
+                .setLabel('Claim')
+                .setStyle(ButtonStyle.Success)
+                .setEmoji('🔓');
+
+            const closeButton = new ButtonBuilder()
+                .setCustomId(`close_ticket_${serviceChannel.id}`)
+                .setLabel('Close')
+                .setStyle(ButtonStyle.Danger)
+                .setEmoji('🔒');
+
+            const buttonRow = new ActionRowBuilder().addComponents(claimButton, closeButton);
+
             // Send welcome message in the new channel
             const channelEmbed = new EmbedBuilder()
-                .setTitle(`🏢 ${service.name} Request`)
-                .setDescription(`Hello ${interaction.user.toString()}, thank you for requesting **${service.name}**!`)
+                .setTitle(`${service.name} Request`)
+                .setDescription(`Hello ${interaction.user.toString()}, thank you for requesting for our service!\n\nA member of our staff team will be with you shortly to assist you.`)
                 .addFields(
                     { name: 'Service Description', value: service.description || 'No description provided', inline: false },
-                    { name: 'Requested By', value: interaction.user.toString(), inline: true }
+                    { name: 'Requested By', value: interaction.user.toString(), inline: true },
+                    { name: 'Status', value: '🟡 **Open** - Waiting for staff', inline: true }
                 )
                 .setColor(0x0099FF)
                 .setFooter({ text: 'A staff member will assist you shortly.' })
                 .setTimestamp();
 
             await serviceChannel.send({
-                content: `${staffRole.toString()} - New service request from ${interaction.user.toString()}!`,
-                embeds: [channelEmbed]
+                content: `\`||${staffRole.toString()}||\`\n New service request from ${interaction.user.toString()}!`,
+                embeds: [channelEmbed],
+                components: [buttonRow]
             });
+
+            // Store ticket in database
+            await db.pool.execute(
+                'INSERT INTO service_tickets (guildId, channelId, userId, serviceId, status) VALUES (?, ?, ?, ?, ?)',
+                [interaction.guild.id, serviceChannel.id, interaction.user.id, service.id, 'open']
+            );
 
             // Send confirmation to user
             await interaction.editReply({
@@ -513,6 +574,203 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0xFF0000)
                         .setDescription(errorMessage)
+                ]
+            });
+            return true;
+        }
+    },
+
+    async handleClaimTicket(interaction) {
+        await interaction.deferReply({ ephemeral: true });
+
+        const channelId = interaction.customId.replace('claim_ticket_', '');
+        const channel = interaction.guild.channels.cache.get(channelId);
+
+        if (!channel) {
+            return interaction.editReply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xFF0000)
+                        .setDescription('❌ Channel not found.')
+                ]
+            });
+        }
+
+        try {
+            // Update ticket in database
+            await db.pool.execute(
+                'UPDATE service_tickets SET claimedBy = ?, status = ? WHERE channelId = ?',
+                [interaction.user.id, 'claimed', channelId]
+            );
+
+            // Get ticket info
+            const [tickets] = await db.pool.execute(
+                'SELECT * FROM service_tickets WHERE channelId = ?',
+                [channelId]
+            );
+
+            if (tickets.length === 0) {
+                return interaction.editReply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xFF0000)
+                            .setDescription('❌ Ticket not found in database.')
+                    ]
+                });
+            }
+
+            const ticket = tickets[0];
+
+            // Update the embed in the channel
+            const messages = await channel.messages.fetch({ limit: 10 });
+            const welcomeMessage = messages.find(msg => msg.embeds.length > 0 && msg.embeds[0].title?.includes('Request'));
+
+            if (welcomeMessage) {
+                const oldEmbed = welcomeMessage.embeds[0];
+                const newEmbed = EmbedBuilder.from(oldEmbed)
+                    .spliceFields(2, 1, { name: 'Status', value: '🟢 **Claimed** - ' + interaction.user.toString(), inline: true });
+
+                await welcomeMessage.edit({
+                    embeds: [newEmbed],
+                    components: welcomeMessage.components // Keep the same buttons
+                });
+            }
+
+            await interaction.editReply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0x00FF00)
+                        .setDescription('✅ Ticket claimed successfully!')
+                ]
+            });
+
+            // Notify the channel
+            await channel.send({
+                content: `🎯 ${interaction.user.toString()} has claimed this ticket!`
+            });
+
+            return true;
+
+        } catch (error) {
+            console.error('Error claiming ticket:', error);
+            await interaction.editReply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xFF0000)
+                        .setDescription('❌ There was an error claiming the ticket.')
+                ]
+            });
+            return true;
+        }
+    },
+
+    async handleCloseTicket(interaction) {
+        const channelId = interaction.customId.replace('close_ticket_', '');
+        
+        // Create the modal
+        const modal = new ModalBuilder()
+            .setCustomId(`close_modal_${channelId}`)
+            .setTitle('Close Service Ticket');
+
+        // Add components to modal
+        const reasonInput = new TextInputBuilder()
+            .setCustomId('close_reason')
+            .setLabel('Reason for closing')
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder('Enter the reason for closing this ticket...')
+            .setRequired(true)
+            .setMaxLength(1000);
+
+        const actionRow = new ActionRowBuilder().addComponents(reasonInput);
+        modal.addComponents(actionRow);
+
+        // Show the modal to the user
+        await interaction.showModal(modal);
+        return true;
+    },
+
+    async handleCloseModal(interaction) {
+        await interaction.deferReply({ ephemeral: true });
+
+        const channelId = interaction.customId.replace('close_modal_', '');
+        const closeReason = interaction.fields.getTextInputValue('close_reason');
+        const channel = interaction.guild.channels.cache.get(channelId);
+
+        if (!channel) {
+            return interaction.editReply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xFF0000)
+                        .setDescription('❌ Channel not found.')
+                ]
+            });
+        }
+
+        try {
+            // Get ticket info
+            const [tickets] = await db.pool.execute(
+                'SELECT * FROM service_tickets WHERE channelId = ?',
+                [channelId]
+            );
+
+            if (tickets.length === 0) {
+                return interaction.editReply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xFF0000)
+                            .setDescription('❌ Ticket not found in database.')
+                    ]
+                });
+            }
+
+            const ticket = tickets[0];
+
+            // Update ticket in database
+            await db.pool.execute(
+                'UPDATE service_tickets SET status = ?, closeReason = ?, closedAt = NOW() WHERE channelId = ?',
+                ['closed', closeReason, channelId]
+            );
+
+            // Try to DM the user
+            try {
+                const user = await interaction.client.users.fetch(ticket.userId);
+                const dmEmbed = new EmbedBuilder()
+                    .setTitle('Service Ticket Closed')
+                    .setDescription(`Your service request has been closed.`)
+                    .addFields(
+                        { name: 'Service', value: 'Check original service for details', inline: true },
+                        { name: 'Closed By', value: interaction.user.toString(), inline: true },
+                        { name: 'Reason', value: closeReason, inline: false }
+                    )
+                    .setColor(0xFFA500)
+                    .setTimestamp();
+
+                await user.send({ embeds: [dmEmbed] });
+            } catch (dmError) {
+                console.log('Could not DM user:', dmError);
+                // Continue even if DM fails
+            }
+
+            // Delete the channel
+            await channel.delete('Service ticket closed');
+
+            await interaction.editReply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0x00FF00)
+                        .setDescription('✅ Ticket closed and channel deleted successfully!')
+                ]
+            });
+
+            return true;
+
+        } catch (error) {
+            console.error('Error closing ticket:', error);
+            await interaction.editReply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xFF0000)
+                        .setDescription('❌ There was an error closing the ticket.')
                 ]
             });
             return true;
