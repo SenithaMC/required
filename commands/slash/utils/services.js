@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, PermissionsBitField } = require('discord.js');
 const db = require('../../../utils/db');
 
-// Initialize database table if it doesn't exist
+// Initialize database tables if they don't exist
 async function initializeServicesTable() {
     try {
         await db.pool.execute(`
@@ -15,9 +15,17 @@ async function initializeServicesTable() {
                 UNIQUE KEY unique_guild_service (guildId, name)
             )
         `);
-        console.log('✅ Services table initialized');
+
+        await db.pool.execute(`
+            CREATE TABLE IF NOT EXISTS service_settings (
+                guildId VARCHAR(255) PRIMARY KEY,
+                staffRoleId VARCHAR(255),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ Services tables initialized');
     } catch (error) {
-        console.error('❌ Error initializing services table:', error);
+        console.error('❌ Error initializing services tables:', error);
     }
 }
 
@@ -54,6 +62,17 @@ module.exports = {
             subcommand
                 .setName('remove')
                 .setDescription('Remove services from the services list')
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('staff')
+                .setDescription('Set the staff role for service requests')
+                .addRoleOption(option =>
+                    option
+                        .setName('role')
+                        .setDescription('The staff role to mention in service threads')
+                        .setRequired(true)
+                )
         ),
 
     async execute(interaction) {
@@ -80,6 +99,9 @@ module.exports = {
                 break;
             case 'remove':
                 await this.handleRemove(interaction);
+                break;
+            case 'staff':
+                await this.handleStaff(interaction);
                 break;
         }
     },
@@ -288,6 +310,42 @@ module.exports = {
         }
     },
 
+    async handleStaff(interaction) {
+        await interaction.deferReply({ ephemeral: true });
+
+        const staffRole = interaction.options.getRole('role');
+
+        try {
+            // Update or insert staff role setting
+            await db.pool.execute(
+                `INSERT INTO service_settings (guildId, staffRoleId) 
+                 VALUES (?, ?) 
+                 ON DUPLICATE KEY UPDATE staffRoleId = ?`,
+                [interaction.guild.id, staffRole.id, staffRole.id]
+            );
+
+            await interaction.editReply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0x00FF00)
+                        .setDescription(`✅ Staff role set to ${staffRole.toString()}`)
+                        .setFooter({ text: `Configured by ${interaction.user.tag}` })
+                        .setTimestamp()
+                ]
+            });
+
+        } catch (error) {
+            console.error('Error setting staff role:', error);
+            await interaction.editReply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xFF0000)
+                        .setDescription('❌ There was an error setting the staff role.')
+                ]
+            });
+        }
+    },
+
     // Component handler for the select menus - FIXED VERSION
     handleComponent: async function(interaction) {
         if (!interaction.isStringSelectMenu()) return false;
@@ -326,20 +384,87 @@ module.exports = {
 
             const service = services[0];
 
-            // Create response embed
-            const embed = new EmbedBuilder()
-                .setTitle(`🏢 ${service.name}`)
-                .setDescription(service.description || 'No description available.')
+            // Check if staff role is set
+            const [settings] = await db.pool.execute(
+                'SELECT * FROM service_settings WHERE guildId = ?',
+                [interaction.guild.id]
+            );
+
+            if (settings.length === 0 || !settings[0].staffRoleId) {
+                return interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xFFA500)
+                            .setDescription('❌ Staff role is not configured. Use `/services staff` to set it up first.')
+                    ],
+                    ephemeral: true
+                });
+            }
+
+            const staffRole = interaction.guild.roles.cache.get(settings[0].staffRoleId);
+            if (!staffRole) {
+                return interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xFFA500)
+                            .setDescription('❌ Configured staff role not found. Please reconfigure with `/services staff`.')
+                    ],
+                    ephemeral: true
+                });
+            }
+
+            // Check if channel supports threads
+            if (!interaction.channel.isThread() && !interaction.channel.threads) {
+                return interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xFF0000)
+                            .setDescription('❌ This channel does not support threads.')
+                    ],
+                    ephemeral: true
+                });
+            }
+
+            // Create private thread
+            const threadName = `service-${service.name.toLowerCase().replace(/\s+/g, '-')}-${interaction.user.username}`;
+            const thread = await interaction.channel.threads.create({
+                name: threadName.substring(0, 100), // Discord thread name limit
+                autoArchiveDuration: 1440, // 24 hours
+                type: 'PRIVATE_THREAD',
+                reason: `Service request for ${service.name} by ${interaction.user.tag}`
+            });
+
+            // Add the user and staff role to the thread
+            await thread.members.add(interaction.user.id);
+            await thread.members.add(interaction.client.user.id); // Add bot
+
+            // Send thread welcome message
+            const threadEmbed = new EmbedBuilder()
+                .setTitle(`🏢 ${service.name} Service Request`)
+                .setDescription(`Hello ${interaction.user.toString()}, thank you for requesting **${service.name}**!`)
                 .addFields(
-                    { name: 'Service ID', value: `#${service.id}`, inline: true },
-                    { name: 'Added', value: `<t:${Math.floor(new Date(service.createdAt).getTime() / 1000)}:R>`, inline: true }
+                    { name: 'Service Description', value: service.description || 'No description provided', inline: false },
+                    { name: 'Status', value: '🟡 Waiting for staff response', inline: true },
+                    { name: 'Requested By', value: interaction.user.toString(), inline: true }
                 )
                 .setColor(0x0099FF)
-                .setFooter({ text: 'Service Information' })
+                .setFooter({ text: 'A staff member will assist you shortly.' })
                 .setTimestamp();
 
+            // Mention staff role in the thread
+            await thread.send({
+                content: `${staffRole.toString()} - New service request!`,
+                embeds: [threadEmbed]
+            });
+
+            // Send confirmation to user
             await interaction.reply({
-                embeds: [embed],
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0x00FF00)
+                        .setDescription(`✅ Created private thread for **${service.name}**: ${thread.toString()}`)
+                        .setFooter({ text: 'Please check the thread for further assistance' })
+                ],
                 ephemeral: true
             });
 
@@ -347,14 +472,35 @@ module.exports = {
 
         } catch (error) {
             console.error('Error handling service selection:', error);
-            await interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setDescription('❌ There was an error processing your selection.')
-                ],
-                ephemeral: true
-            });
+            
+            if (error.code === 50035) { // Invalid form body (likely thread name too long)
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xFF0000)
+                            .setDescription('❌ Could not create thread. Service name might be too long.')
+                    ],
+                    ephemeral: true
+                });
+            } else if (error.code === 50013) { // Missing permissions
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xFF0000)
+                            .setDescription('❌ Bot lacks permissions to create threads in this channel.')
+                    ],
+                    ephemeral: true
+                });
+            } else {
+                await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xFF0000)
+                            .setDescription('❌ There was an error processing your selection.')
+                    ],
+                    ephemeral: true
+                });
+            }
             return true;
         }
     },
