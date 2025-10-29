@@ -107,7 +107,7 @@ module.exports = {
     },
 
     async handleEmbed(interaction) {
-        await interaction.deferReply(); // NOT ephemeral - we want the embed to be public
+        await interaction.channel.send(); // NOT ephemeral - we want the embed to be public
 
         try {
             // Fetch all services for this guild
@@ -146,14 +146,10 @@ module.exports = {
 
             // Create the embed
             const embed = new EmbedBuilder()
-                .setTitle('🏢 Server Services')
+                .setTitle('DevArc • Services')
                 .setDescription('Select a service from the dropdown below to get more information or access the service.')
-                .addFields(
-                    { name: 'Available Services', value: `**${services.length}** service(s) available`, inline: true },
-                    { name: 'How to Use', value: 'Use the dropdown menu below to select a service', inline: true }
-                )
                 .setColor(0x0099FF)
-                .setFooter({ text: `Services Manager • ${interaction.guild.name}` })
+                .setFooter({ text: `Services • ${interaction.guild.name}` })
                 .setTimestamp();
 
             await interaction.editReply({
