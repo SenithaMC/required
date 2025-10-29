@@ -485,7 +485,7 @@ module.exports = {
             // Send welcome message in the new channel
             const channelEmbed = new EmbedBuilder()
                 .setTitle(`${service.name} Request`)
-                .setDescription(`Hello ${interaction.user.toString()}, thank you for requesting for our service!\n\nA member of our staff team will be with you shortly to assist you.`)
+                .setDescription(`Hello ${interaction.user.toString()}, thank you for requesting for our service!\nA member of our staff team will be with you shortly to assist you.'\n`)
                 .addFields(
                     { name: 'Service Description', value: service.description || 'No description provided', inline: false },
                     { name: 'Requested By', value: interaction.user.toString(), inline: true },
@@ -641,22 +641,29 @@ module.exports = {
         }
 
         // Check if user has permission to close tickets
+        // Allow: Server owner, users with MANAGE_MESSAGES permission, or users with staff role
+        const hasManageMessages = interaction.memberPermissions.has(PermissionsBitField.Flags.ManageMessages);
+        const isServerOwner = interaction.guild.ownerId === interaction.user.id;
+        
+        let hasStaffRole = false;
+        
+        // Check if staff role is configured and user has it
         const [settings] = await db.pool.execute(
             'SELECT * FROM service_settings WHERE guildId = ?',
             [interaction.guild.id]
         );
 
-        if (settings.length === 0 || !settings[0].staffRoleId) {
-            return interaction.reply({
-                content: '❌ Staff role is not configured.',
-                flags: 64
-            });
+        if (settings.length > 0 && settings[0].staffRoleId) {
+            const staffRole = interaction.guild.roles.cache.get(settings[0].staffRoleId);
+            if (staffRole && interaction.member.roles.cache.has(staffRole.id)) {
+                hasStaffRole = true;
+            }
         }
 
-        const staffRole = interaction.guild.roles.cache.get(settings[0].staffRoleId);
-        if (!staffRole || !interaction.member.roles.cache.has(staffRole.id)) {
+        // If user doesn't have any of the required permissions
+        if (!isServerOwner && !hasManageMessages && !hasStaffRole) {
             return interaction.reply({
-                content: '❌ You do not have permission to close tickets.',
+                content: '❌ You do not have permission to close tickets. You need either:\n• Server Owner\n• Manage Messages permission\n• Staff role',
                 flags: 64
             });
         }
