@@ -691,27 +691,57 @@ module.exports = {
     },
 
     async handleCloseModal(interaction) {
+        // Add immediate acknowledgment to prevent timeout
         await interaction.deferReply({ flags: 64 });
 
         const channelId = interaction.customId.replace('close_modal_', '');
         const closeReason = interaction.fields.getTextInputValue('close_reason');
-        const channel = interaction.guild.channels.cache.get(channelId);
-
-        if (!channel) {
-            return interaction.editReply({
-                content: '❌ Channel not found.'
-            });
-        }
+        
+        console.log(`🔧 Debug: Closing ticket for channel: ${channelId}`);
 
         try {
-            // Get ticket info
+            // Check database connection first
+            try {
+                await db.pool.execute('SELECT 1');
+            } catch (dbError) {
+                console.error('❌ Database connection error:', dbError);
+                return await interaction.editReply({
+                    content: '❌ Database connection error. Please try again later.'
+                });
+            }
+
+            const channel = interaction.guild.channels.cache.get(channelId);
+            
+            if (!channel) {
+                console.log('❌ Channel not found:', channelId);
+                return await interaction.editReply({
+                    content: '❌ Ticket channel no longer exists.'
+                });
+            }
+
+            // Check bot permissions
+            const botPermissions = channel.permissionsFor(interaction.guild.members.me);
+            if (!botPermissions.has(PermissionsBitField.Flags.ManageChannels)) {
+                return await interaction.editReply({
+                    content: '❌ I do not have permission to manage this channel.'
+                });
+            }
+
+            if (!botPermissions.has(PermissionsBitField.Flags.SendMessages)) {
+                return await interaction.editReply({
+                    content: '❌ I do not have permission to send messages in this channel.'
+                });
+            }
+
+            // Get ticket info first
             const [tickets] = await db.pool.execute(
                 'SELECT * FROM service_tickets WHERE channelId = ?',
                 [channelId]
             );
 
             if (tickets.length === 0) {
-                return interaction.editReply({
+                console.log('❌ No ticket found for channel:', channelId);
+                return await interaction.editReply({
                     content: '❌ Ticket not found in database.'
                 });
             }
@@ -719,22 +749,22 @@ module.exports = {
             const ticket = tickets[0];
 
             // Update ticket in database
+            console.log('🔧 Debug: Updating ticket in database...');
             await db.pool.execute(
                 'UPDATE service_tickets SET status = ?, closeReason = ?, closedAt = NOW() WHERE channelId = ?',
                 ['closed', closeReason, channelId]
             );
 
-            // Try to DM the user with better error handling
+            console.log('✅ Ticket updated in database');
+
+            // Try to DM the user
             let dmSent = false;
             try {
                 const user = await interaction.client.users.fetch(ticket.userId);
-                
-                // Check if user has DMs enabled by trying to send a test message
                 const dmEmbed = new EmbedBuilder()
                     .setTitle('Service Ticket Closed')
                     .setDescription(`Your service request in **${interaction.guild.name}** has been closed.`)
                     .addFields(
-                        { name: 'Service', value: 'Check original service for details', inline: true },
                         { name: 'Closed By', value: interaction.user.toString(), inline: true },
                         { name: 'Reason', value: closeReason.substring(0, 1000), inline: false }
                     )
@@ -743,41 +773,40 @@ module.exports = {
 
                 await user.send({ embeds: [dmEmbed] });
                 dmSent = true;
+                console.log('✅ DM sent to user');
             } catch (dmError) {
-                if (dmError.code === 50007) { // Cannot send messages to this user
-                    console.log(`User ${ticket.userId} has DMs disabled or blocked the bot`);
-                } else {
-                    console.log('Could not DM user:', dmError.message);
-                }
+                console.log('⚠️ Could not DM user:', dmError.message);
                 dmSent = false;
             }
 
-            // Send final message to channel before deletion
+            // Send final message to channel
             const closeEmbed = new EmbedBuilder()
                 .setTitle('Ticket Closed')
                 .setDescription(`This ticket has been closed by ${interaction.user.toString()}`)
-                .addFields(
-                    { name: 'Reason', value: closeReason.substring(0, 1000), inline: false }
-                )
+                .addFields({ name: 'Reason', value: closeReason.substring(0, 1000) })
                 .setColor(0xFF0000)
                 .setTimestamp();
 
             if (!dmSent) {
-                closeEmbed.addFields(
-                    { name: 'Note', value: 'Could not send DM to user. They may have DMs disabled.', inline: false }
-                );
+                closeEmbed.addFields({
+                    name: 'Note', 
+                    value: 'Could not send DM to user. They may have DMs disabled.', 
+                    inline: false 
+                });
             }
 
             await channel.send({ embeds: [closeEmbed] });
+            console.log('✅ Close message sent to channel');
 
-            // Wait a moment for the message to be seen, then delete the channel
+            // Delete channel after short delay
             setTimeout(async () => {
                 try {
                     await channel.delete('Service ticket closed');
+                    console.log('✅ Channel deleted successfully');
                 } catch (deleteError) {
-                    console.error('Error deleting channel:', deleteError);
+                    console.error('❌ Error deleting channel:', deleteError);
                 }
-            }, 2000);
+            }, 3000);
 
             await interaction.editReply({
                 content: `✅ Ticket closed${dmSent ? ' and user notified' : ''}! Channel will be deleted shortly.`
@@ -786,9 +815,18 @@ module.exports = {
             return true;
 
         } catch (error) {
-            console.error('Error closing ticket:', error);
+            console.error('❌ Error in handleCloseModal:', error);
+            let errorMessage = '❌ There was an error closing the ticket. Please try again or contact an administrator.';
+            
+            // Provide more specific error messages
+            if (error.code === 50001) { // Missing Access
+                errorMessage = '❌ I do not have access to the ticket channel.';
+            } else if (error.code === 50013) { // Missing Permissions
+                errorMessage = '❌ I lack permissions to manage the ticket channel.';
+            }
+            
             await interaction.editReply({
-                content: '❌ There was an error closing the ticket.'
+                content: errorMessage
             });
             return true;
         }
