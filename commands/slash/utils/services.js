@@ -2,6 +2,7 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBui
 const db = require('../../../utils/db');
 
 // Initialize database tables if they don't exist
+// Initialize database tables if they don't exist
 async function initializeServicesTable() {
     try {
         await db.pool.execute(`
@@ -46,14 +47,33 @@ async function initializeServicesTable() {
                 claimedBy VARCHAR(255) DEFAULT NULL,
                 status ENUM('open', 'claimed', 'closed') DEFAULT 'open',
                 closeReason TEXT DEFAULT NULL,
-                projectDescription TEXT,
-                deadline VARCHAR(255),
-                budget VARCHAR(255),
-                additionalInfo TEXT,
                 createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 closedAt TIMESTAMP NULL DEFAULT NULL
             )
         `);
+
+        // Check and add the new columns if they don't exist
+        const newColumns = [
+            { name: 'projectDescription', type: 'TEXT' },
+            { name: 'deadline', type: 'VARCHAR(255)' },
+            { name: 'budget', type: 'VARCHAR(255)' },
+            { name: 'additionalInfo', type: 'TEXT' }
+        ];
+
+        for (const column of newColumns) {
+            try {
+                await db.pool.execute(`SELECT ${column.name} FROM service_tickets LIMIT 1`);
+            } catch (error) {
+                if (error.code === 'ER_BAD_FIELD_ERROR') {
+                    console.log(`🔄 Adding ${column.name} column to service_tickets table...`);
+                    await db.pool.execute(`ALTER TABLE service_tickets ADD COLUMN ${column.name} ${column.type}`);
+                    console.log(`✅ ${column.name} column added successfully`);
+                } else {
+                    throw error;
+                }
+            }
+        }
+
         console.log('✅ Services tables initialized');
     } catch (error) {
         console.error('❌ Error initializing services tables:', error);
@@ -368,9 +388,6 @@ module.exports = {
     },
 
     async handleServiceSelect(interaction) {
-        // Immediately defer the reply to prevent timeout
-        await interaction.deferReply({ flags: 64 });
-
         try {
             const serviceId = interaction.values[0];
             
@@ -381,8 +398,9 @@ module.exports = {
             );
 
             if (services.length === 0) {
-                return interaction.editReply({
-                    content: '❌ Service not found.'
+                return interaction.reply({
+                    content: '❌ Service not found.',
+                    flags: 64
                 });
             }
 
@@ -395,15 +413,17 @@ module.exports = {
             );
 
             if (settings.length === 0 || !settings[0].staffRoleId) {
-                return interaction.editReply({
-                    content: '❌ Staff role is not configured. Use `/services staff` to set it up first.'
+                return interaction.reply({
+                    content: '❌ Staff role is not configured. Use `/services staff` to set it up first.',
+                    flags: 64
                 });
             }
 
             const staffRole = interaction.guild.roles.cache.get(settings[0].staffRoleId);
             if (!staffRole) {
-                return interaction.editReply({
-                    content: '❌ Configured staff role not found. Please reconfigure with `/services staff`.'
+                return interaction.reply({
+                    content: '❌ Configured staff role not found. Please reconfigure with `/services staff`.',
+                    flags: 64
                 });
             }
 
@@ -420,7 +440,7 @@ module.exports = {
                 .setPlaceholder('Please describe your project in detail...')
                 .setRequired(true)
                 .setMaxLength(2000)
-                .setMinLength(50);
+                .setMinLength(20);
 
             // Add deadline input
             const deadlineInput = new TextInputBuilder()
@@ -458,13 +478,8 @@ module.exports = {
             // Add action rows to modal
             modal.addComponents(firstActionRow, secondActionRow, thirdActionRow, fourthActionRow);
 
-            // Show the modal
+            // Show the modal - DON'T defer before this!
             await interaction.showModal(modal);
-
-            // Let the user know the modal is opening
-            await interaction.editReply({
-                content: '📝 Please fill out the project details in the modal that just opened...'
-            });
 
             return true;
 
@@ -477,9 +492,19 @@ module.exports = {
                 errorMessage = '❌ Bot lacks permissions to create modals or manage interactions.';
             }
 
-            await interaction.editReply({
-                content: errorMessage
-            });
+            // Only reply if we haven't already responded
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({
+                    content: errorMessage,
+                    flags: 64
+                });
+            } else {
+                // If we already responded, try to follow up
+                await interaction.followUp({
+                    content: errorMessage,
+                    flags: 64
+                });
+            }
             return true;
         }
     },
@@ -524,7 +549,7 @@ module.exports = {
 
             if (!servicesCategory) {
                 servicesCategory = await interaction.guild.channels.create({
-                    name: 'Services',
+                    name: 'Service Requests',
                     type: ChannelType.GuildCategory,
                     permissionOverwrites: [
                         {
@@ -631,8 +656,8 @@ module.exports = {
             // Store ticket in database with all the modal data
             await db.pool.execute(
                 `INSERT INTO service_tickets 
-                 (guildId, channelId, userId, serviceId, status, projectDescription, deadline, budget, additionalInfo) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                (guildId, channelId, userId, serviceId, status, projectDescription, deadline, budget, additionalInfo) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     interaction.guild.id, 
                     serviceChannel.id, 
