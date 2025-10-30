@@ -625,7 +625,7 @@ module.exports = {
 
             // Create detailed embed with all project information
             const channelEmbed = new EmbedBuilder()
-                .setTitle(`🎯 ${service.name} Request`)
+                .setTitle(`${service.name} Request`)
                 .setDescription(`Hello ${interaction.user.toString()}, thank you for your service request!\nA member of our staff team will be with you shortly.\n\n**Service Details:**`)
                 .addFields(
                     { name: '📋 Service Description', value: service.description || 'No description provided', inline: false },
