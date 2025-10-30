@@ -46,6 +46,10 @@ async function initializeServicesTable() {
                 claimedBy VARCHAR(255) DEFAULT NULL,
                 status ENUM('open', 'claimed', 'closed') DEFAULT 'open',
                 closeReason TEXT DEFAULT NULL,
+                projectDescription TEXT,
+                deadline VARCHAR(255),
+                budget VARCHAR(255),
+                additionalInfo TEXT,
                 createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 closedAt TIMESTAMP NULL DEFAULT NULL
             )
@@ -355,13 +359,16 @@ module.exports = {
             if (interaction.customId.startsWith('close_modal_')) {
                 return await this.handleCloseModal(interaction);
             }
+            if (interaction.customId.startsWith('service_details_')) {
+                return await this.handleServiceDetailsModal(interaction);
+            }
         }
 
         return false;
     },
 
     async handleServiceSelect(interaction) {
-        // Defer the reply immediately to avoid interaction timeout
+        // Immediately defer the reply to prevent timeout
         await interaction.deferReply({ flags: 64 });
 
         try {
@@ -400,6 +407,116 @@ module.exports = {
                 });
             }
 
+            // Create the project details modal
+            const modal = new ModalBuilder()
+                .setCustomId(`service_details_${serviceId}`)
+                .setTitle(`Project Details - ${service.name}`);
+
+            // Add project description input
+            const projectDescriptionInput = new TextInputBuilder()
+                .setCustomId('project_description')
+                .setLabel('Project Description')
+                .setStyle(TextInputStyle.Paragraph)
+                .setPlaceholder('Please describe your project in detail...')
+                .setRequired(true)
+                .setMaxLength(2000)
+                .setMinLength(50);
+
+            // Add deadline input
+            const deadlineInput = new TextInputBuilder()
+                .setCustomId('deadline')
+                .setLabel('Deadline / Timeline')
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder('e.g., 2 weeks, ASAP, December 15th...')
+                .setRequired(true)
+                .setMaxLength(100);
+
+            // Add budget input
+            const budgetInput = new TextInputBuilder()
+                .setCustomId('budget')
+                .setLabel('Budget Range')
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder('e.g., $100-200, Flexible, To be discussed...')
+                .setRequired(false)
+                .setMaxLength(100);
+
+            // Add additional information input
+            const additionalInfoInput = new TextInputBuilder()
+                .setCustomId('additional_info')
+                .setLabel('Additional Information')
+                .setStyle(TextInputStyle.Paragraph)
+                .setPlaceholder('Any other details, references, or special requirements...')
+                .setRequired(false)
+                .setMaxLength(1000);
+
+            // Add all inputs to action rows
+            const firstActionRow = new ActionRowBuilder().addComponents(projectDescriptionInput);
+            const secondActionRow = new ActionRowBuilder().addComponents(deadlineInput);
+            const thirdActionRow = new ActionRowBuilder().addComponents(budgetInput);
+            const fourthActionRow = new ActionRowBuilder().addComponents(additionalInfoInput);
+
+            // Add action rows to modal
+            modal.addComponents(firstActionRow, secondActionRow, thirdActionRow, fourthActionRow);
+
+            // Show the modal
+            await interaction.showModal(modal);
+
+            // Let the user know the modal is opening
+            await interaction.editReply({
+                content: '📝 Please fill out the project details in the modal that just opened...'
+            });
+
+            return true;
+
+        } catch (error) {
+            console.error('Error handling service selection:', error);
+            
+            let errorMessage = '❌ There was an error processing your selection.';
+            
+            if (error.code === 50013) { // Missing permissions
+                errorMessage = '❌ Bot lacks permissions to create modals or manage interactions.';
+            }
+
+            await interaction.editReply({
+                content: errorMessage
+            });
+            return true;
+        }
+    },
+
+    async handleServiceDetailsModal(interaction) {
+        // Defer the reply immediately
+        await interaction.deferReply({ flags: 64 });
+
+        try {
+            const serviceId = interaction.customId.replace('service_details_', '');
+            const projectDescription = interaction.fields.getTextInputValue('project_description');
+            const deadline = interaction.fields.getTextInputValue('deadline');
+            const budget = interaction.fields.getTextInputValue('budget') || 'Not specified';
+            const additionalInfo = interaction.fields.getTextInputValue('additional_info') || 'None provided';
+
+            // Fetch service details again
+            const [services] = await db.pool.execute(
+                'SELECT * FROM services WHERE id = ?',
+                [serviceId]
+            );
+
+            if (services.length === 0) {
+                return interaction.editReply({
+                    content: '❌ Service not found.'
+                });
+            }
+
+            const service = services[0];
+
+            // Fetch staff role settings
+            const [settings] = await db.pool.execute(
+                'SELECT * FROM service_settings WHERE guildId = ?',
+                [interaction.guild.id]
+            );
+
+            const staffRole = interaction.guild.roles.cache.get(settings[0].staffRoleId);
+
             // Find or create "Services" category
             let servicesCategory = interaction.guild.channels.cache.find(
                 channel => channel.name === 'Services' && channel.type === ChannelType.GuildCategory
@@ -421,7 +538,7 @@ module.exports = {
                     ]
                 });
 
-                // Store category ID in database - with error handling for missing column
+                // Store category ID in database
                 try {
                     await db.pool.execute(
                         `INSERT INTO service_settings (guildId, staffRoleId, categoryId) 
@@ -440,7 +557,7 @@ module.exports = {
 
             // Create private channel for the service request
             const userName = interaction.user.username;
-            const channelName = `${userName}-request`.toLowerCase().replace(/[^a-z0-9-]/g, '-').substring(0, 100);
+            const channelName = `${userName}-${service.name.toLowerCase()}`.replace(/[^a-z0-9-]/g, '-').substring(0, 100);
 
             const serviceChannel = await interaction.guild.channels.create({
                 name: channelName,
@@ -482,29 +599,51 @@ module.exports = {
 
             const buttonRow = new ActionRowBuilder().addComponents(claimButton, closeButton);
 
-            // Send welcome message in the new channel
+            // Create detailed embed with all project information
             const channelEmbed = new EmbedBuilder()
-                .setTitle(`${service.name} Request`)
-                .setDescription(`Hello ${interaction.user.toString()}, thank you for requesting for our service!\nA member of our staff team will be with you shortly to assist you.'\n`)
+                .setTitle(`🎯 ${service.name} Request`)
+                .setDescription(`Hello ${interaction.user.toString()}, thank you for your service request!\nA member of our staff team will be with you shortly.\n\n**Service Details:**`)
                 .addFields(
-                    { name: 'Service Description', value: service.description || 'No description provided', inline: false },
-                    { name: 'Requested By', value: interaction.user.toString(), inline: true },
-                    { name: 'Status', value: '🟡 **Open** - Waiting for staff', inline: true }
+                    { name: '📋 Service Description', value: service.description || 'No description provided', inline: false },
+                    { name: '👤 Requested By', value: interaction.user.toString(), inline: true },
+                    { name: '📅 Deadline', value: deadline, inline: true },
+                    { name: '💰 Budget', value: budget, inline: true },
+                    { name: '📝 Project Description', value: projectDescription.substring(0, 1024), inline: false }
                 )
                 .setColor(0x0099FF)
                 .setFooter({ text: 'A staff member will assist you shortly.' })
                 .setTimestamp();
 
+            // Add additional info field if provided
+            if (additionalInfo && additionalInfo !== 'None provided') {
+                channelEmbed.addFields(
+                    { name: 'ℹ️ Additional Information', value: additionalInfo.substring(0, 1024), inline: false }
+                );
+            }
+
+            // Send welcome message in the new channel
             await serviceChannel.send({
-                content: `||${staffRole.toString()}||\n New service request from ${interaction.user.toString()}!`,
+                content: `||${staffRole.toString()}||\n🎉 New service request from ${interaction.user.toString()}!`,
                 embeds: [channelEmbed],
                 components: [buttonRow]
             });
 
-            // Store ticket in database
+            // Store ticket in database with all the modal data
             await db.pool.execute(
-                'INSERT INTO service_tickets (guildId, channelId, userId, serviceId, status) VALUES (?, ?, ?, ?, ?)',
-                [interaction.guild.id, serviceChannel.id, interaction.user.id, service.id, 'open']
+                `INSERT INTO service_tickets 
+                 (guildId, channelId, userId, serviceId, status, projectDescription, deadline, budget, additionalInfo) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    interaction.guild.id, 
+                    serviceChannel.id, 
+                    interaction.user.id, 
+                    service.id, 
+                    'open',
+                    projectDescription,
+                    deadline,
+                    budget,
+                    additionalInfo
+                ]
             );
 
             // Send confirmation to user
@@ -512,17 +651,24 @@ module.exports = {
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0x00FF00)
-                        .setDescription(`✅ Created private channel for **${service.name}**: ${serviceChannel.toString()}`)
+                        .setTitle('✅ Service Request Created!')
+                        .setDescription(`Your **${service.name}** request has been submitted successfully!`)
+                        .addFields(
+                            { name: 'Channel', value: serviceChannel.toString(), inline: true },
+                            { name: 'Deadline', value: deadline, inline: true },
+                            { name: 'Budget', value: budget, inline: true }
+                        )
                         .setFooter({ text: 'Please check the channel for further assistance' })
+                        .setTimestamp()
                 ]
             });
 
             return true;
 
         } catch (error) {
-            console.error('Error handling service selection:', error);
+            console.error('Error handling service details modal:', error);
             
-            let errorMessage = '❌ There was an error processing your selection.';
+            let errorMessage = '❌ There was an error creating your service request.';
             
             if (error.code === 50013) { // Missing permissions
                 errorMessage = '❌ Bot lacks permissions to create channels or manage permissions.';
@@ -584,7 +730,10 @@ module.exports = {
             if (welcomeMessage) {
                 const oldEmbed = welcomeMessage.embeds[0];
                 const newEmbed = EmbedBuilder.from(oldEmbed)
-                    .spliceFields(2, 1, { name: 'Status', value: '🟢 **Claimed** - ' + interaction.user.toString(), inline: true });
+                    .spliceFields(1, 1, { name: '👤 Requested By', value: oldEmbed.data.fields[1].value, inline: true })
+                    .spliceFields(2, 1, { name: '🎯 Claimed By', value: interaction.user.toString(), inline: true })
+                    .spliceFields(3, 1, { name: '📅 Deadline', value: oldEmbed.data.fields[3].value, inline: true })
+                    .spliceFields(4, 1, { name: '💰 Budget', value: oldEmbed.data.fields[4].value, inline: true });
 
                 // Create updated buttons with claim button disabled
                 const disabledClaimButton = new ButtonBuilder()
@@ -614,7 +763,7 @@ module.exports = {
 
             // Notify the channel
             await channel.send({
-                content: `🎯 ${interaction.user.toString()} has claimed this ticket!`
+                content: `🎯 ${interaction.user.toString()} has claimed this ticket and will be assisting you!`
             });
 
             return true;
@@ -641,7 +790,6 @@ module.exports = {
         }
 
         // Check if user has permission to close tickets
-        // Allow: Server owner, users with MANAGE_MESSAGES permission, or users with staff role
         const hasManageMessages = interaction.memberPermissions.has(PermissionsBitField.Flags.ManageMessages);
         const isServerOwner = interaction.guild.ownerId === interaction.user.id;
         
