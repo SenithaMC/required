@@ -2,7 +2,6 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBui
 const db = require('../../../utils/db');
 
 // Initialize database tables if they don't exist
-// Initialize database tables if they don't exist
 async function initializeServicesTable() {
     try {
         await db.pool.execute(`
@@ -631,8 +630,8 @@ module.exports = {
                 .addFields(
                     { name: '📋 Service Description', value: service.description || 'No description provided', inline: false },
                     { name: '👤 Requested By', value: interaction.user.toString(), inline: true },
-                    { name: '📅 Deadline', value: deadline, inline: true },
-                    { name: '💰 Budget', value: budget, inline: true },
+                    { name: '📅 Deadline', value: `\`${deadline}\``, inline: true },
+                    { name: '💰 Budget', value: `\`${budget}\``, inline: true },
                     { name: '📝 Project Description', value: projectDescription.substring(0, 1024), inline: false }
                 )
                 .setColor(0x0099FF)
