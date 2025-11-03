@@ -1,4 +1,4 @@
-const db = require('../../utils/db');
+const db = require('../../../utils/db');
 
 module.exports = {
   name: 'pset',
@@ -30,4 +30,5 @@ module.exports = {
       message.channel.send('❌ Error updating prefix.');
     }
   }
+
 };
