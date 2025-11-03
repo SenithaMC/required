@@ -26,11 +26,28 @@ module.exports = {
 
     if (await handleTagSystem(interaction, client)) return;
 
+    if (await handlePsetSystem(interaction, client)) return;
+
     if (interaction.isButton() || interaction.isStringSelectMenu()) {
       console.log(`🔘 Component interaction (unhandled): ${interaction.customId} by ${interaction.user.tag}`);
     }
   }
 };
+
+async function handlePsetSystem(interaction, client) {
+  if (interaction.isButton() && (
+    interaction.customId === 'test_prefix' ||
+    interaction.customId === 'reset_prefix' ||
+    interaction.customId === 'reset_prefix_current'
+  )) {
+    const psetCommand = client.prefixCommands.get('pset');
+    if (psetCommand && psetCommand.handleComponent) {
+      await psetCommand.handleComponent(interaction);
+      return true;
+    }
+  }
+  return false;
+}
 
 async function handleSlashCommand(interaction, client) {
   const command = client.slashCommands.get(interaction.commandName);
