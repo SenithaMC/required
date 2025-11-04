@@ -1,6 +1,6 @@
 const { EmbedBuilder, PermissionsBitField, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 const config = require('../../config');
-const db = require('../../../utils/db');
+const db = require('../../utils/db');
 
 const commandDatabase = {
     kick: {
