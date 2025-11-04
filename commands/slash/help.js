@@ -293,7 +293,7 @@ const commandDatabase = {
     bcreate: {
         name: 'bcreate',
         description: 'Create a comprehensive backup of server data',
-        usage: `${prefix}bcreate <name>`,
+        usage: `bcreate <name>`,
         category: 'Backup',
         aliases: ['backupcreate'],
         staffOnly: true,
@@ -302,7 +302,7 @@ const commandDatabase = {
     bauto: {
         name: 'bauto',
         description: 'Configure automatic backups',
-        usage: `${prefix}bauto <on/off> OR ${prefix}bauto <interval> <amount>`,
+        usage: '`bauto <on/off>` OR `bauto <interval> <amount>`',
         category: 'Backup',
         aliases: ['backupauto'],
         staffOnly: true,
@@ -311,7 +311,7 @@ const commandDatabase = {
     bload: {
         name: 'bload',
         description: 'Load a created backup',
-        usage: `${prefix}bload [name]`,
+        usage: `bload [name]`,
         category: 'Backup',
         aliases: ['backupload'],
         staffOnly: true,
@@ -320,7 +320,7 @@ const commandDatabase = {
     bview: {
         name: 'bview',
         description: 'View comprehensive backup details including server structure',
-        usage: `${prefix}bview <name>`,
+        usage: `bview <name>`,
         category: 'Backup',
         aliases: ['backupview'],
         staffOnly: true,
@@ -329,7 +329,7 @@ const commandDatabase = {
     blist: {
         name: 'blist',
         description: 'Show created backup list',
-        usage: `${prefix}blist`,
+        usage: `blist`,
         category: 'Backup',
         aliases: ['backuplist'],
         staffOnly: true,
@@ -338,7 +338,7 @@ const commandDatabase = {
     bdel: {
         name: 'bdel',
         description: 'Delete a created backup',
-        usage: `${prefix}bdel <name>`,
+        usage: `bdel <name>`,
         category: 'Backup',
         aliases: ['backupdelete'],
         staffOnly: true,
