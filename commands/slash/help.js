@@ -1,6 +1,6 @@
 const { EmbedBuilder, PermissionsBitField, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
-const config = require('../../config');
-const db = require('../../utils/db');
+const config = require('../../../config');
+const db = require('../../../utils/db');
 
 const commandDatabase = {
     kick: {
@@ -302,7 +302,7 @@ const commandDatabase = {
     bauto: {
         name: 'bauto',
         description: 'Configure automatic backups',
-        usage: '`bauto <on/off>` OR `bauto <interval> <amount>`',
+        usage: `bauto <on/off> OR bauto <interval> <amount>`,
         category: 'Backup',
         aliases: ['backupauto'],
         staffOnly: true,
@@ -372,6 +372,25 @@ const commandDatabase = {
         aliases: ['t'],
         staffOnly: false,
         details: 'Manages message tags for quick responses. Use "tag list" to see all commands.'
+    },
+
+    pset: {
+        name: 'pset',
+        description: 'Set server prefix',
+        usage: `pset <prefix>`,
+        category: 'Misc.',
+        aliases: ['prefix', 'setprefix'],
+        staffOnly: true,
+        details: 'Sets a custom command prefix for the server.'
+    },
+    preset: {
+        name: 'preset',
+        description: 'Reset server prefix to default',
+        usage: `preset`,
+        category: 'Misc.',
+        aliases: ['prefixreset', 'resetprefix', 'defaultprefix'],
+        staffOnly: true,
+        details: 'Resets the server prefix back to the default value.'
     }
 };
 
