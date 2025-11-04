@@ -1,5 +1,6 @@
 const { EmbedBuilder, PermissionsBitField } = require('discord.js');
 const config = require('../../../config');
+const db = require('../../../database');
 
 module.exports = {
   name: 'greet',
@@ -18,12 +19,17 @@ module.exports = {
       return message.channel.send({ embeds: [embed], ephemeral: true });
     }
 
-    if (!client.greetConfigs) {
-      client.greetConfigs = new Map();
-    }
-
     if (!args[0]) {
-      const currentConfig = client.greetConfigs.get(message.guild.id);
+      let currentConfig;
+      try {
+        const rows = await db.executeWithRetry(
+          'SELECT * FROM greet_configs WHERE guildId = ?',
+          [message.guild.id]
+        );
+        currentConfig = rows[0];
+      } catch (error) {
+        console.error('Error fetching greet config:', error);
+      }
       
       const embed = new EmbedBuilder()
         .setColor(0x0099FF)
@@ -33,7 +39,7 @@ module.exports = {
           { 
             name: 'Current Configuration', 
             value: currentConfig 
-              ? `**Channel:** <#${currentConfig.channelId}>\n**Message:** ${currentConfig.message}\n**Delete After:** ${currentConfig.deleteAfter}s`
+              ? `**Channel:** <#${currentConfig.channelId}>\n**Message:** ${currentConfig.message}\n**Delete After:** ${currentConfig.deleteAfter}s\n**Enabled:** ${currentConfig.enabled ? 'Yes' : 'No'}`
               : 'Not set' 
           },
           { 
@@ -55,19 +61,29 @@ module.exports = {
     }
 
     if (args[0].toLowerCase() === 'disable') {
-      const wasEnabled = client.greetConfigs.has(message.guild.id);
-      client.greetConfigs.delete(message.guild.id);
-      
-      const embed = new EmbedBuilder()
-        .setColor(wasEnabled ? 0x00FF00 : 0xFFA500)
-        .setTitle(wasEnabled ? '✅ Greet Disabled' : 'ℹ️ Greet Already Disabled')
-        .setDescription(wasEnabled 
-          ? 'Welcome messages have been disabled for this server.' 
-          : 'Welcome messages were already disabled.'
-        )
-        .setTimestamp();
-      
-      return message.channel.send({ embeds: [embed] });
+      try {
+        await db.executeWithRetry(
+          'UPDATE greet_configs SET enabled = FALSE WHERE guildId = ?',
+          [message.guild.id]
+        );
+        
+        const embed = new EmbedBuilder()
+          .setColor(0x00FF00)
+          .setTitle('✅ Greet Disabled')
+          .setDescription('Welcome messages have been disabled for this server.')
+          .setTimestamp();
+        
+        return message.channel.send({ embeds: [embed] });
+      } catch (error) {
+        console.error('Error disabling greet:', error);
+        const embed = new EmbedBuilder()
+          .setColor(0xFF0000)
+          .setTitle('❌ Error')
+          .setDescription('Failed to disable greet configuration.')
+          .setTimestamp();
+        
+        return message.channel.send({ embeds: [embed], ephemeral: true });
+      }
     }
 
     const channel = message.mentions.channels.first();
@@ -146,29 +162,42 @@ module.exports = {
       return message.channel.send({ embeds: [embed], ephemeral: true });
     }
 
-    client.greetConfigs.set(message.guild.id, {
-      channelId: channel.id,
-      message: welcomeMessage,
-      deleteAfter: deleteAfter
-    });
+    try {
+      await db.executeWithRetry(
+        `INSERT INTO greet_configs (guildId, channelId, message, deleteAfter, enabled) 
+         VALUES (?, ?, ?, ?, TRUE) 
+         ON DUPLICATE KEY UPDATE 
+         channelId = ?, message = ?, deleteAfter = ?, enabled = TRUE`,
+        [message.guild.id, channel.id, welcomeMessage, deleteAfter, channel.id, welcomeMessage, deleteAfter]
+      );
 
-    const embed = new EmbedBuilder()
-      .setColor(0x00FF00)
-      .setTitle('✅ Greet Configuration Set')
-      .setDescription(`Welcome messages have been configured for ${channel}`)
-      .addFields(
-        { name: 'Welcome Message', value: welcomeMessage.replace(/{user}/g, '@user') },
-        { name: 'Delete After', value: `\`${deleteAfter} seconds\`` },
-        { name: 'Disable', value: 'Use `greet disable` to turn off welcome messages.' },
-      )
-      .setTimestamp();
+      const embed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('✅ Greet Configuration Set')
+        .setDescription(`Welcome messages have been configured for ${channel}`)
+        .addFields(
+          { name: 'Welcome Message', value: welcomeMessage.replace(/{user}/g, '@user') },
+          { name: 'Delete After', value: `\`${deleteAfter} seconds\`` },
+          { name: 'Disable', value: 'Use `greet disable` to turn off welcome messages.' },
+        )
+        .setTimestamp();
 
-    await message.channel.send({ embeds: [embed] });
-    
-    console.log(`Greet config set for guild ${message.guild.id}:`, {
-      channel: channel.id,
-      message: welcomeMessage,
-      deleteAfter: deleteAfter
-    });
+      await message.channel.send({ embeds: [embed] });
+      
+      console.log(`Greet config set for guild ${message.guild.id}:`, {
+        channel: channel.id,
+        message: welcomeMessage,
+        deleteAfter: deleteAfter
+      });
+    } catch (error) {
+      console.error('Error saving greet configuration:', error);
+      const embed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle('❌ Database Error')
+        .setDescription('Failed to save greet configuration to database.')
+        .setTimestamp();
+      
+      return message.channel.send({ embeds: [embed], ephemeral: true });
+    }
   }
 };
