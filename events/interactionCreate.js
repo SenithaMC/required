@@ -6,6 +6,7 @@ const {
   PermissionFlagsBits 
 } = require('discord.js');
 const db = require('../utils/db');
+const BackupLoader = require('../utils/backupLoader');
 
 module.exports = {
   name: 'interactionCreate',
@@ -19,6 +20,8 @@ module.exports = {
       await handleModalSubmit(interaction, client);
       return;
     }
+
+    if (await handleBackupSystem(interaction, client)) return;
 
     if (await handleTicketSystem(interaction)) return;
 
@@ -491,4 +494,210 @@ async function handleClaimTicket(interaction) {
       content: '❌ Error claiming ticket.' 
     });
   }
+}
+
+async function handleBackupSystem(interaction, client) {
+  if (interaction.isStringSelectMenu() && (
+    interaction.customId === 'bview_select' ||
+    interaction.customId === 'bload_select' || 
+    interaction.customId === 'bdel_select'
+  )) {
+    await handleBackupActionSelect(interaction, client);
+    return true;
+  }
+
+  if (interaction.isButton() && (
+    interaction.customId.startsWith('bload_confirm_') ||
+    interaction.customId.startsWith('bdel_confirm_') ||
+    interaction.customId === 'bload_cancel' ||
+    interaction.customId === 'bdel_cancel'
+  )) {
+    await handleBackupConfirmation(interaction, client);
+    return true;
+  }
+
+  return false;
+}
+
+async function handleBackupActionSelect(interaction, client) {
+  if (!interaction.deferred && !interaction.replied) {
+    await interaction.deferReply({ flags: 64 });
+  }
+
+  const backupId = interaction.values[0];
+  const action = interaction.customId.replace('_select', '');
+
+  try {
+    const [backup] = await db.executeWithRetry(
+      'SELECT * FROM backups WHERE id = ? AND guild_id = ?',
+      [backupId, interaction.guild.id]
+    );
+
+    if (!backup) {
+      return await interaction.editReply({ 
+        content: '❌ Backup not found.'
+      });
+    }
+
+    if (action === 'bview') {
+      const backupData = JSON.parse(backup.data);
+      const embed = new EmbedBuilder()
+        .setTitle(`📊 Backup: ${backup.name}`)
+        .setColor(0x3498DB)
+        .addFields(
+          { name: 'Backup ID', value: `\`${backup.id}\``, inline: true },
+          { name: 'Created', value: new Date(backup.created_at).toLocaleString(), inline: true },
+          { name: 'Data Size', value: `${Math.round(JSON.stringify(backupData).length / 1024)} KB`, inline: true }
+        );
+
+      if (backupData.server_structure) {
+        const server = backupData.server_structure;
+        embed.addFields(
+          { name: '🎭 Roles', value: server.roles?.length.toString() || '0', inline: true },
+          { name: '📁 Channels', value: server.channels?.length.toString() || '0', inline: true },
+          { name: '😊 Emojis', value: server.emojis?.length.toString() || '0', inline: true }
+        );
+      }
+
+      await interaction.editReply({ embeds: [embed] });
+
+    } else if (action === 'bload' || action === 'bdel') {
+      const actionName = action === 'bload' ? 'Load' : 'Delete';
+      const color = action === 'bload' ? 0xF39C12 : 0xE74C3C;
+      
+      const embed = new EmbedBuilder()
+        .setTitle(`Confirm ${actionName} Backup`)
+        .setDescription(`You are about to **${actionName.toLowerCase()}** the backup:\n**${backup.name}**`)
+        .setColor(color)
+        .addFields(
+          { name: 'Backup ID', value: `\`${backup.id}\``, inline: true },
+          { name: 'Created', value: new Date(backup.created_at).toLocaleString(), inline: true },
+          { name: 'Data Size', value: `${Math.round(JSON.stringify(JSON.parse(backup.data)).length / 1024)} KB`, inline: true }
+        )
+        .setFooter({ text: `This action cannot be undone!` });
+
+      const confirmButton = new ButtonBuilder()
+        .setCustomId(`${action}_confirm_${backup.id}`)
+        .setLabel(`Yes, ${actionName.toLowerCase()} this backup`)
+        .setStyle(action === 'bload' ? ButtonStyle.Success : ButtonStyle.Danger);
+
+      const cancelButton = new ButtonBuilder()
+        .setCustomId(`${action}_cancel`)
+        .setLabel('Cancel')
+        .setStyle(ButtonStyle.Secondary);
+
+      const row = new ActionRowBuilder().addComponents(confirmButton, cancelButton);
+
+      await interaction.editReply({ 
+        embeds: [embed], 
+        components: [row]
+      });
+    }
+
+  } catch (error) {
+    console.error('Backup action error:', error);
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply({ 
+        content: '❌ Error processing backup action.'
+      });
+    } else {
+      await interaction.reply({ 
+        content: '❌ Error processing backup action.', 
+        flags: 64 
+      });
+    }
+  }
+}
+
+async function handleBackupConfirmation(interaction, client) {
+    if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferUpdate();
+    }
+
+    if (interaction.customId.endsWith('_cancel')) {
+        await interaction.editReply({
+            content: '❌ Action cancelled.',
+            embeds: [],
+            components: []
+        });
+        return;
+    }
+
+    const parts = interaction.customId.split('_');
+    const action = parts[0];
+    const backupId = parts[2];
+
+    try {
+        if (action === 'bdel') {
+            await db.executeWithRetry(
+                'DELETE FROM backups WHERE id = ? AND guild_id = ?',
+                [backupId, interaction.guild.id]
+            );
+
+            await interaction.editReply({
+                content: '✅ Backup deleted successfully.',
+                embeds: [],
+                components: []
+            });
+
+        } else if (action === 'bload') {
+            if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+                return await interaction.editReply({
+                    content: '❌ You need administrator permissions to load backups.',
+                    embeds: [],
+                    components: []
+                });
+            }
+
+            const loadingEmbed = new EmbedBuilder()
+                .setTitle('🔄 Loading Backup')
+                .setDescription('Starting backup restoration process...')
+                .setColor(0xF39C12)
+                .setTimestamp();
+
+            try {
+                await interaction.editReply({
+                    embeds: [loadingEmbed],
+                    components: []
+                });
+            } catch (error) {
+                if (error.code === 10008) {
+                    await interaction.followUp({ 
+                        embeds: [loadingEmbed],
+                        ephemeral: false
+                    });
+                } else {
+                    throw error;
+                }
+            }
+
+            const backupLoader = new BackupLoader(client);
+            await backupLoader.loadBackup(interaction, backupId);
+        }
+
+    } catch (error) {
+        console.error('Backup confirmation error:', error);
+        
+        const errorEmbed = new EmbedBuilder()
+            .setTitle('❌ Backup Restoration Failed')
+            .setDescription(`Error: ${error.message}`)
+            .setColor(0xFF0000)
+            .setTimestamp();
+
+        try {
+            await interaction.editReply({
+                embeds: [errorEmbed],
+                components: []
+            });
+        } catch (editError) {
+            if (editError.code === 10008) {
+                await interaction.followUp({ 
+                    embeds: [errorEmbed],
+                    ephemeral: false
+                });
+            } else {
+                console.error('Could not send error message:', editError);
+            }
+        }
+    }
 }
