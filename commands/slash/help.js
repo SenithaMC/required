@@ -292,30 +292,57 @@ const commandDatabase = {
 
     bcreate: {
         name: 'bcreate',
-        description: 'Create a manual backup',
-        usage: `bcreate <name>`,
+        description: 'Create a comprehensive backup of server data',
+        usage: `${prefix}bcreate <name>`,
         category: 'Backup',
         aliases: ['backupcreate'],
         staffOnly: true,
-        details: 'Creates a manual backup of server data with the specified name.'
+        details: 'Creates a backup of server data with the specified name.'
     },
-    binterval: {
-        name: 'binterval',
-        description: 'Set auto backup interval',
-        usage: `binterval set <hours>`,
+    bauto: {
+        name: 'bauto',
+        description: 'Configure automatic backups',
+        usage: `${prefix}bauto <on/off> OR ${prefix}bauto <interval> <amount>`,
         category: 'Backup',
-        aliases: ['backupinterval'],
+        aliases: ['backupauto'],
         staffOnly: true,
-        details: 'Sets the automatic backup interval in hours (1-8760).'
+        details: 'Enables/disables automatic backups or sets interval and amount.'
     },
-    bamount: {
-        name: 'bamount',
-        description: 'Set backup retention count',
-        usage: `bamount <number>`,
+    bload: {
+        name: 'bload',
+        description: 'Load a created backup',
+        usage: `${prefix}bload [name]`,
         category: 'Backup',
-        aliases: ['backupamount'],
+        aliases: ['backupload'],
         staffOnly: true,
-        details: 'Sets how many recent backups to keep (1-100).'
+        details: 'Loads a backup using a dropdown menu or by specifying the name.'
+    },
+    bview: {
+        name: 'bview',
+        description: 'View comprehensive backup details including server structure',
+        usage: `${prefix}bview <name>`,
+        category: 'Backup',
+        aliases: ['backupview'],
+        staffOnly: true,
+        details: 'Displays detailed information about a specific backup.'
+    },
+    blist: {
+        name: 'blist',
+        description: 'Show created backup list',
+        usage: `${prefix}blist`,
+        category: 'Backup',
+        aliases: ['backuplist'],
+        staffOnly: true,
+        details: 'Lists all backups created for the server.'
+    },
+    bdel: {
+        name: 'bdel',
+        description: 'Delete a created backup',
+        usage: `${prefix}bdel <name>`,
+        category: 'Backup',
+        aliases: ['backupdelete'],
+        staffOnly: true,
+        details: 'Deletes a specified backup from the server.'
     },
 
     review: {
@@ -513,17 +540,25 @@ async function showInteractiveHelp(interaction, commandDatabase, isStaff, prefix
     setupDropdownCollector(reply, interaction, commandDatabase, isStaff, prefix, categories);
 }
 
-function createMainEmbed(interaction, commandDatabase, isStaff, prefix, categories) {
+function createMainEmbed(message, commandDatabase, isStaff, prefix, categories) {
     const totalCommands = Object.values(commandDatabase).filter(cmd => !cmd.staffOnly || isStaff).length;
     const staffCommands = Object.values(commandDatabase).filter(cmd => cmd.staffOnly && isStaff).length;
 
+    const defaultPrefix = config.prefix;
+    const isCustomPrefix = prefix !== defaultPrefix;
+
+    let prefixDisplay = `\`${prefix}\``;
+    if (isCustomPrefix) {
+        prefixDisplay += ` (default: \`${defaultPrefix}\` also works)`;
+    }
+
     const embed = new EmbedBuilder()
         .setTitle('🎯 Command Help Center')
-        .setDescription(`**Prefix:** \`${prefix}\` | **Available Commands:** ${totalCommands}${isStaff ? ` (${staffCommands} staff)` : ''}\n\nBrowse commands by category using the dropdown below!`)
+        .setDescription(`**Prefix:** ${prefixDisplay} | **Available Commands:** ${totalCommands}${isStaff ? ` (${staffCommands} staff)` : ''}\n\nBrowse commands by category using the dropdown below!`)
         .addFields(
             { 
                 name: '📖 Quick Guide', 
-                value: `• \`${prefix}help [command]\` - Specific command info\n• Use dropdown for navigation`, 
+                value: `• \`${prefix}help [command]\` - Specific command info\n• \`${defaultPrefix}help [command]\` - Also works${isCustomPrefix ? '\n• Both prefixes work for all commands' : ''}`, 
                 inline: false 
             },
             { 
@@ -534,8 +569,8 @@ function createMainEmbed(interaction, commandDatabase, isStaff, prefix, categori
         )
         .setColor(categories.main.color)
         .setFooter({ 
-            text: `${interaction.client.user.username} • Use "/help command:name" for details`,
-            iconURL: interaction.client.user.displayAvatarURL()
+            text: `${message.client.user.username} • Type "${prefix}help [command]" for details`,
+            iconURL: message.client.user.displayAvatarURL()
         })
         .setTimestamp();
 
