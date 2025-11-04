@@ -1,6 +1,7 @@
 const { EmbedBuilder, PermissionsBitField, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 const config = require('../../../config');
 const db = require('../../../utils/db');
+const pset = require('../misc/pset');
 
 module.exports = {
   name: 'help',
@@ -383,6 +384,25 @@ module.exports = {
             aliases: ['t'],
             staffOnly: false,
             details: 'Manages message tags for quick responses. Use "tag list" to see all commands.'
+        },
+
+        pset: {
+            name: 'pset',
+            description: 'Set server prefix',
+            usage: `${prefix}pset <prefix>`,
+            category: 'Misc.',
+            aliases: ['prefix', 'setprefix'],
+            staffOnly: true,
+            details: 'Sets a custom command prefix for the server.'
+        },
+        preset: {
+            name: 'preset',
+            description: 'Reset server prefix to default',
+            usage: `${prefix}preset`,
+            category: 'Misc.',
+            aliases: ['prefixreset', 'resetprefix', 'defaultprefix'],
+            staffOnly: true,
+            details: 'Resets the server prefix back to the default value.'
         }
     };
 
