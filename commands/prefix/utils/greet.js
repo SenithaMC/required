@@ -1,13 +1,11 @@
 const { EmbedBuilder, PermissionsBitField } = require('discord.js');
-const config = require('../../../config');
-const db = require('../../../utils/db');
+const db = require('../../../db');
 
 module.exports = {
   name: 'greet',
   description: 'Set a channel for welcome messages when users join the server',
   async execute(message, args) {
     const client = message.client;
-    const prefix = config.prefix;
     
     if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
       const embed = new EmbedBuilder()
@@ -44,11 +42,11 @@ module.exports = {
           },
           { 
             name: 'Usage', 
-            value: `\`${prefix}greet #<channel> <welcome-message> <message-timeout>\``
+            value: `\`greet #<channel> <welcome-message> <message-timeout>\``
           },
           { 
             name: 'Example', 
-            value: `\`${prefix}greet #channel Welcome message here 30\`\n- Set welcome channel, message and delete timer\n\`${prefix}greet disable\` - Disable welcome messages`
+            value: `\`greet #channel Welcome message here 30\`\n- Set welcome channel, message and delete timer\n\`greet disable\` - Disable welcome messages`
           },
           {
             name: 'Placeholders',
