@@ -403,6 +403,61 @@ module.exports = {
             aliases: ['prefixreset', 'resetprefix', 'defaultprefix'],
             staffOnly: true,
             details: 'Resets the server prefix back to the default value.'
+        },
+
+        tadd: {
+            name: 'tadd',
+            description: 'Add a member to the ticket',
+            usage: `tadd <user>`,
+            category: 'Ticket',
+            aliases: [],
+            staffOnly: true,
+            details: 'Adds a member to the trusted list, exempting them from certain restrictions.'
+        },
+        tremove: {
+            name: 'tremove',
+            description: 'Remove a member from the ticket',
+            usage: `tremove <user>`,
+            category: 'Ticket',
+            aliases: [],
+            staffOnly: true,
+            details: 'Removes a member from the trusted list.'
+        },
+        tsend: {
+            name: 'tsend',
+            description: 'Send the tickets embed.',
+            usage: `tsend <message>`,
+            category: 'Ticket',
+            aliases: [],
+            staffOnly: true,
+            details: 'Sends a tickets embed to the channel.'
+        },
+        tsetup: {
+            name: 'tsetup',
+            description: 'Setup the ticket system.',
+            usage: `tsetup`,
+            category: 'Ticket',
+            aliases: [],
+            staffOnly: true,
+            details: 'Initializes the ticket system in the server.'
+        },
+        tclose: {
+            name: 'tclose',
+            description: 'Close the ticket.',
+            usage: `tclose`,
+            category: 'Ticket',
+            aliases: [],
+            staffOnly: false,
+            details: 'Closes the current ticket channel.'
+        },
+        trename: {
+            name: 'trename',
+            description: 'Rename the ticket channel.',
+            usage: `trename <new-name>`,
+            category: 'Ticket',
+            aliases: [],
+            staffOnly: true,
+            details: 'Renames the current ticket channel to the specified new name.'
         }
     };
 
