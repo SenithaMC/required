@@ -1,6 +1,6 @@
 const { EmbedBuilder, PermissionsBitField } = require('discord.js');
 const config = require('../../../config');
-const db = require('../../../db');
+const db = require('../../../utils/db');
 
 module.exports = {
   name: 'greet',
